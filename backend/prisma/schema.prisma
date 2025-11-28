@@ -1,0 +1,294 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== UTILISATEURS ====================
+
+model User {
+  id                String    @id @default(uuid())
+  phone             String    @unique
+  email             String?   @unique
+  passwordHash      String
+  name              String
+  avatarUrl         String?
+  rating            Float     @default(0)
+  reviewCount       Int       @default(0)
+  isVerified        Boolean   @default(false)
+  isPhoneVerified   Boolean   @default(false)
+  isEmailVerified   Boolean   @default(false)
+  isDriver          Boolean   @default(false)
+  
+  // Informations véhicule (pour conducteurs)
+  carModel          String?
+  carPlate          String?
+  carColor          String?
+  driverLicense     String?
+  
+  // Tokens et sécurité
+  refreshToken      String?
+  fcmToken          String?   // Firebase Cloud Messaging pour push notifications
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  ridesAsDriver     Ride[]          @relation("DriverRides")
+  bookings          Booking[]       @relation("PassengerBookings")
+  reviewsGiven      Review[]        @relation("ReviewAuthor")
+  reviewsReceived   Review[]        @relation("ReviewTarget")
+  sentMessages      Message[]       @relation("MessageSender")
+  receivedMessages  Message[]       @relation("MessageReceiver")
+  notifications     Notification[]
+  payments          Payment[]       @relation("PayerPayments")
+  verificationCodes VerificationCode[]
+
+  @@index([phone])
+  @@index([email])
+}
+
+// ==================== VÉRIFICATION ====================
+
+model VerificationCode {
+  id        String   @id @default(uuid())
+  userId    String
+  code      String
+  type      VerificationType
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+}
+
+enum VerificationType {
+  PHONE_VERIFICATION
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+// ==================== TRAJETS ====================
+
+model Ride {
+  id              String    @id @default(uuid())
+  driverId        String
+  
+  // Itinéraire
+  originCity      String
+  originAddress   String?
+  originLat       Float?
+  originLng       Float?
+  destinationCity String
+  destinationAddress String?
+  destinationLat  Float?
+  destinationLng  Float?
+  
+  // Détails du trajet
+  departureTime   DateTime
+  estimatedDuration Int      // en minutes
+  distance        Float?    // en km
+  
+  // Prix et places
+  pricePerSeat    Int       // en XOF (Franc CFA)
+  currency        String    @default("XOF")
+  totalSeats      Int
+  availableSeats  Int
+  
+  // Options
+  features        String[]  // ["Climatisation", "Bagages", "Non-fumeur", etc.]
+  description     String?
+  
+  // Statut
+  status          RideStatus @default(OPEN)
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  driver          User      @relation("DriverRides", fields: [driverId], references: [id])
+  bookings        Booking[]
+  conversations   Conversation[]
+
+  @@index([driverId])
+  @@index([originCity, destinationCity])
+  @@index([departureTime])
+  @@index([status])
+}
+
+enum RideStatus {
+  OPEN        // Trajet ouvert aux réservations
+  FULL        // Toutes les places sont prises
+  IN_PROGRESS // Trajet en cours
+  COMPLETED   // Trajet terminé
+  CANCELLED   // Trajet annulé
+}
+
+// ==================== RÉSERVATIONS ====================
+
+model Booking {
+  id            String        @id @default(uuid())
+  rideId        String
+  passengerId   String
+  seats         Int           @default(1)
+  totalPrice    Int           // Prix total = pricePerSeat * seats
+  
+  status        BookingStatus @default(PENDING)
+  
+  // Point de prise en charge personnalisé (optionnel)
+  pickupAddress String?
+  pickupLat     Float?
+  pickupLng     Float?
+  
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  ride          Ride          @relation(fields: [rideId], references: [id])
+  passenger     User          @relation("PassengerBookings", fields: [passengerId], references: [id])
+  payment       Payment?
+
+  @@unique([rideId, passengerId])
+  @@index([passengerId])
+  @@index([rideId])
+}
+
+enum BookingStatus {
+  PENDING     // En attente de confirmation/paiement
+  CONFIRMED   // Confirmé et payé
+  CANCELLED   // Annulé
+  COMPLETED   // Trajet effectué
+  NO_SHOW     // Passager absent
+}
+
+// ==================== PAIEMENTS ====================
+
+model Payment {
+  id              String        @id @default(uuid())
+  bookingId       String        @unique
+  payerId         String
+  amount          Int           // Montant en XOF
+  currency        String        @default("XOF")
+  
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  
+  // Références externes
+  externalId      String?       // ID de transaction Wave/Orange Money
+  externalRef     String?       // Référence de paiement
+  
+  // Métadonnées
+  metadata        Json?
+  
+  paidAt          DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  booking         Booking       @relation(fields: [bookingId], references: [id])
+  payer           User          @relation("PayerPayments", fields: [payerId], references: [id])
+
+  @@index([payerId])
+  @@index([externalId])
+}
+
+enum PaymentMethod {
+  WAVE
+  ORANGE_MONEY
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// ==================== MESSAGERIE ====================
+
+model Conversation {
+  id          String    @id @default(uuid())
+  rideId      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  ride        Ride      @relation(fields: [rideId], references: [id])
+  messages    Message[]
+
+  @@index([rideId])
+}
+
+model Message {
+  id              String       @id @default(uuid())
+  conversationId  String
+  senderId        String
+  receiverId      String
+  content         String
+  isRead          Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User         @relation("MessageSender", fields: [senderId], references: [id])
+  receiver        User         @relation("MessageReceiver", fields: [receiverId], references: [id])
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+// ==================== AVIS ====================
+
+model Review {
+  id          String   @id @default(uuid())
+  authorId    String
+  targetId    String
+  rideId      String?
+  rating      Int      // 1 à 5
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  author      User     @relation("ReviewAuthor", fields: [authorId], references: [id])
+  target      User     @relation("ReviewTarget", fields: [targetId], references: [id])
+
+  @@unique([authorId, targetId, rideId])
+  @@index([targetId])
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+enum NotificationType {
+  BOOKING_REQUEST     // Nouvelle demande de réservation
+  BOOKING_CONFIRMED   // Réservation confirmée
+  BOOKING_CANCELLED   // Réservation annulée
+  PAYMENT_RECEIVED    // Paiement reçu
+  RIDE_REMINDER       // Rappel de départ
+  NEW_MESSAGE         // Nouveau message
+  REVIEW_RECEIVED     // Nouvel avis reçu
+  SYSTEM              // Notification système
+}
