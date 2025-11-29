@@ -5,12 +5,13 @@ import { Icons } from './Icons';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   initialMode?: 'login' | 'register';
 }
 
 type AuthStep = 'login' | 'register' | 'verify';
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'login' }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, initialMode = 'login' }) => {
   const { login, register, verifyCode, resendCode, isLoading } = useAuth();
   
   const [step, setStep] = useState<AuthStep>(initialMode);
@@ -63,6 +64,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
         setSuccess('Un code de vérification a été envoyé à votre téléphone.');
       } else {
         onClose();
+        onSuccess?.();
         resetForm();
       }
     } else {
@@ -108,6 +110,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     
     if (result.success) {
       onClose();
+      onSuccess?.();
       resetForm();
     } else {
       setError(result.error || 'Code invalide');

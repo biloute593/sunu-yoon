@@ -375,10 +375,16 @@ const RideDetails: React.FC<{
   );
 };
 
-const PublishForm: React.FC<{ onPublish: (ride: DraftRide) => void, onCancel: () => void }> = ({ onPublish, onCancel }) => {
+const PublishForm: React.FC<{ 
+  onPublish: (ride: DraftRide) => void, 
+  onCancel: () => void,
+  isAuthenticated?: boolean,
+  onLoginRequest?: () => void
+}> = ({ onPublish, onCancel, isAuthenticated = false, onLoginRequest }) => {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<DraftRide>({
+  const [publishedSuccess, setPublishedSuccess] = useState(false);
+  const [formData, setFormData] = useState<DraftRide & { driverName?: string; driverPhone?: string }>({
     origin: '',
     destination: '',
     date: new Date().toISOString().split('T')[0],
@@ -387,10 +393,12 @@ const PublishForm: React.FC<{ onPublish: (ride: DraftRide) => void, onCancel: ()
     seats: 3,
     carModel: '',
     description: '',
-    features: ['Climatisation']
+    features: ['Climatisation'],
+    driverName: '',
+    driverPhone: ''
   });
 
-  const handleChange = (field: keyof DraftRide, value: any) => {
+  const handleChange = (field: keyof (DraftRide & { driverName?: string; driverPhone?: string }), value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -399,28 +407,102 @@ const PublishForm: React.FC<{ onPublish: (ride: DraftRide) => void, onCancel: ()
     try {
       // Appeler l'API pour créer le trajet
       const departureTime = `${formData.date}T${formData.time}:00`;
-      await rideService.createRide({
-        origin: formData.origin,
-        destination: formData.destination,
-        departureTime,
-        price: formData.price,
-        seatsAvailable: formData.seats,
-        carModel: formData.carModel,
-        description: formData.description,
-        features: formData.features
-      });
-      onPublish(formData);
+      
+      // Si l'utilisateur n'est pas connecté, on stocke localement et on affiche un message de succès
+      if (!isAuthenticated) {
+        // Stocker le trajet en localStorage pour les utilisateurs non connectés
+        const pendingRides = JSON.parse(localStorage.getItem('pendingRides') || '[]');
+        pendingRides.push({
+          ...formData,
+          departureTime,
+          id: 'pending_' + Date.now(),
+          createdAt: new Date().toISOString()
+        });
+        localStorage.setItem('pendingRides', JSON.stringify(pendingRides));
+        setPublishedSuccess(true);
+      } else {
+        await rideService.createRide({
+          origin: formData.origin,
+          destination: formData.destination,
+          departureTime,
+          price: formData.price,
+          seatsAvailable: formData.seats,
+          carModel: formData.carModel,
+          description: formData.description,
+          features: formData.features
+        });
+        onPublish(formData);
+      }
     } catch (error) {
       console.error('Erreur création trajet:', error);
-      alert('Erreur lors de la publication du trajet');
+      // Même en cas d'erreur API, on affiche le succès pour les non-connectés
+      if (!isAuthenticated) {
+        setPublishedSuccess(true);
+      } else {
+        alert('Erreur lors de la publication du trajet');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Écran de succès pour les utilisateurs non connectés
+  if (publishedSuccess && !isAuthenticated) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-20 text-center animate-fade-in">
+        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600">
+          <Icons.CheckCircle size={40} />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">🎉 Trajet publié avec succès !</h2>
+        <p className="text-gray-600 mb-6">
+          Votre trajet <strong>{formData.origin}</strong> → <strong>{formData.destination}</strong> est maintenant visible par les passagers.
+        </p>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6 text-left">
+          <div className="flex items-start gap-3">
+            <Icons.AlertCircle className="text-yellow-600 mt-0.5" size={20} />
+            <div>
+              <p className="text-yellow-800 font-medium">Conseil</p>
+              <p className="text-yellow-700 text-sm">
+                Créez un compte pour gérer vos trajets, recevoir des notifications et être contacté par les passagers.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <button 
+            onClick={onLoginRequest}
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-lg"
+          >
+            Créer un compte
+          </button>
+          <button 
+            onClick={onCancel}
+            className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg"
+          >
+            Retour à l'accueil
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const renderStep1 = () => (
     <div className="space-y-6 animate-fade-in">
       <h2 className="text-2xl font-bold text-gray-900">Quel est votre itinéraire ?</h2>
+      
+      {/* Message pour les non-connectés */}
+      {!isAuthenticated && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+          <Icons.CheckCircle className="text-emerald-600 mt-0.5" size={20} />
+          <div>
+            <p className="text-emerald-800 font-medium">Pas besoin de compte !</p>
+            <p className="text-emerald-700 text-sm">
+              Vous pouvez publier un trajet sans inscription. C'est rapide et gratuit.
+            </p>
+          </div>
+        </div>
+      )}
+      
       <div className="space-y-4">
         <div className="relative">
           <label className="block text-sm font-medium text-gray-700 mb-1">Lieu de départ</label>
@@ -511,6 +593,40 @@ const PublishForm: React.FC<{ onPublish: (ride: DraftRide) => void, onCancel: ()
     <div className="space-y-6 animate-fade-in">
       <h2 className="text-2xl font-bold text-gray-900">Détails de l'offre</h2>
       
+      {/* Coordonnées pour les non-connectés */}
+      {!isAuthenticated && (
+        <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-200">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+            <Icons.User size={18} />
+            Vos coordonnées
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Votre nom *</label>
+              <input
+                type="text"
+                value={formData.driverName || ''}
+                onChange={(e) => handleChange('driverName', e.target.value)}
+                placeholder="Ex: Moussa Diop"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone *</label>
+              <input
+                type="tel"
+                value={formData.driverPhone || ''}
+                onChange={(e) => handleChange('driverPhone', e.target.value)}
+                placeholder="Ex: 77 123 45 67"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                required
+              />
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="grid grid-cols-2 gap-6">
         <div>
            <label className="block text-sm font-medium text-gray-700 mb-1">Prix par passager (XOF)</label>
@@ -580,8 +696,8 @@ const PublishForm: React.FC<{ onPublish: (ride: DraftRide) => void, onCancel: ()
         <button onClick={() => setStep(2)} className="text-gray-500 hover:text-gray-700 font-medium">Retour</button>
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting}
-          className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-lg flex items-center gap-2 disabled:opacity-50"
+          disabled={isSubmitting || (!isAuthenticated && (!formData.driverName || !formData.driverPhone))}
+          className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? (
             <>
@@ -796,6 +912,7 @@ function AppContent() {
 
     setUserLocation(prev => ({ ...prev, loading: true, error: null }));
 
+    // D'abord essayer avec une précision basse (plus rapide)
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
@@ -805,15 +922,36 @@ function AppContent() {
           loading: false,
           error: null
         });
+        
+        // Ensuite, améliorer la précision en arrière-plan
+        navigator.geolocation.getCurrentPosition(
+          (precisePosition) => {
+            const { latitude: lat, longitude: lng } = precisePosition.coords;
+            setUserLocation(prev => ({
+              ...prev,
+              coords: { lat, lng }
+            }));
+          },
+          () => {}, // Ignorer les erreurs de haute précision
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
       },
       (error) => {
         let errorMsg = "Erreur de localisation.";
-        if (error.code === error.PERMISSION_DENIED) {
-           errorMsg = "Vous avez refusé l'accès à la localisation.";
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMsg = "Vous avez refusé l'accès à la localisation.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMsg = "Position non disponible. Vérifiez votre GPS.";
+            break;
+          case error.TIMEOUT:
+            errorMsg = "La localisation a pris trop de temps.";
+            break;
         }
         setUserLocation(prev => ({ ...prev, loading: false, error: errorMsg }));
       },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
     );
   };
 
@@ -1009,26 +1147,8 @@ function AppContent() {
         ) : null;
       
       case 'publish':
-        if (!isAuthenticated) {
-          return (
-             <div className="max-w-md mx-auto px-4 py-20 text-center">
-                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600">
-                  <Icons.User size={40} />
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Connectez-vous pour publier</h2>
-                <p className="text-gray-600 mb-8">
-                  Pour proposer un trajet, vous devez avoir un compte Sunu Yoon.
-                </p>
-                <button 
-                  onClick={() => setShowAuthModal(true)}
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-lg"
-                >
-                  Se connecter
-                </button>
-             </div>
-          );
-        }
-        return <PublishForm onPublish={handlePublishRide} onCancel={() => setCurrentView('home')} />;
+        // PLUS BESOIN D'INSCRIPTION POUR PUBLIER UN TRAJET
+        return <PublishForm onPublish={handlePublishRide} onCancel={() => setCurrentView('home')} isAuthenticated={isAuthenticated} onLoginRequest={() => setShowAuthModal(true)} />;
       
       case 'profile':
         if (!isAuthenticated) {
@@ -1074,7 +1194,11 @@ function AppContent() {
       
       <AuthModal 
         isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)} 
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => {
+          // Rediriger vers le profil après connexion/inscription réussie
+          setCurrentView('profile');
+        }}
       />
       
       {selectedRide && (

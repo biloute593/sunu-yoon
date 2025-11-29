@@ -23,7 +23,8 @@ import {
   LogOut,
   Bell,
   Wallet,
-  Smartphone
+  Smartphone,
+  AlertCircle
 } from 'lucide-react';
 
 export const Icons = {
@@ -50,5 +51,6 @@ export const Icons = {
   LogOut,
   Bell,
   Wallet,
-  Smartphone
+  Smartphone,
+  AlertCircle
 };

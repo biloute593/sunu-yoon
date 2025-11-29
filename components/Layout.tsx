@@ -41,20 +41,21 @@ const Layout: React.FC<LayoutProps> = ({
             </div>
 
             {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center space-x-8">
+            <nav className="hidden md:flex items-center space-x-6">
+              {/* BOUTON AJOUTER UN TRAJET - EN PREMIER ET BIEN VISIBLE */}
+              <button 
+                onClick={() => onNavigate('publish')}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-md hover:shadow-lg transition-all transform hover:scale-105"
+              >
+                <Icons.PlusCircle size={20} />
+                Ajouter un trajet
+              </button>
               <button 
                 onClick={() => onNavigate('search')}
                 className={`flex items-center gap-2 text-sm font-medium transition-colors ${currentView === 'search' ? 'text-emerald-600' : 'text-gray-600 hover:text-emerald-600'}`}
               >
                 <Icons.Search size={18} />
                 Rechercher
-              </button>
-              <button 
-                onClick={() => onNavigate('publish')}
-                className={`flex items-center gap-2 text-sm font-medium transition-colors ${currentView === 'publish' ? 'text-emerald-600' : 'text-gray-600 hover:text-emerald-600'}`}
-              >
-                <Icons.PlusCircle size={18} />
-                Publier un trajet
               </button>
               
               {user ? (
@@ -117,17 +118,19 @@ const Layout: React.FC<LayoutProps> = ({
                  </div>
               )}
               
+              {/* BOUTON AJOUTER UN TRAJET - EN PREMIER SUR MOBILE */}
+              <button 
+                onClick={() => { onNavigate('publish'); setIsMenuOpen(false); }}
+                className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-md mb-2"
+              >
+                <Icons.PlusCircle size={20} />
+                Ajouter un trajet
+              </button>
               <button 
                 onClick={() => { onNavigate('search'); setIsMenuOpen(false); }}
                 className="block w-full text-left px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-emerald-600 hover:bg-gray-50"
               >
                 Rechercher un trajet
-              </button>
-              <button 
-                onClick={() => { onNavigate('publish'); setIsMenuOpen(false); }}
-                className="block w-full text-left px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-emerald-600 hover:bg-gray-50"
-              >
-                Publier un trajet
               </button>
               
               {user ? (
