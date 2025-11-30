@@ -325,7 +325,7 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
   return (
     <div 
       onClick={onClick}
-      className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-lg hover:border-emerald-200 transition-all cursor-pointer group"
+      className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-lg hover:border-emerald-200 transition-all cursor-pointer group flex flex-col h-full"
     >
       <div className="flex justify-between items-start mb-4">
         <div className="flex flex-col relative pl-5 border-l-2 border-emerald-200 space-y-4">
@@ -366,7 +366,7 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+      <div className="flex items-center justify-between pt-4 border-t border-gray-50 mt-auto">
         <div className="flex items-center gap-3">
           <div className="relative">
             <img 
@@ -1065,6 +1065,24 @@ const PublishForm: React.FC<{
                     +
                   </button>
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">Ou saisir manuellement (minimum 500 F)</label>
+                <div className="flex items-center rounded-2xl border border-gray-200 overflow-hidden">
+                  <span className="px-4 py-3 text-gray-500 bg-gray-50 border-r border-gray-100 font-semibold">XOF</span>
+                  <input
+                    type="number"
+                    min={500}
+                    step={100}
+                    value={formData.price}
+                    onChange={(e) => {
+                      const value = Math.max(500, Number(e.target.value) || 0);
+                      handleChange('price', value);
+                    }}
+                    className="w-full px-4 py-3 text-lg font-bold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Les voyageurs apprécient les tarifs clairs. Ajustez librement à partir de 500 F.</p>
               </div>
               <div className="flex items-center justify-between">
                 <div>
@@ -1856,33 +1874,33 @@ function AppContent() {
               )}
               
               {isLoading ? (
-                 <div className="space-y-4">
-                   {[1,2,3].map(i => (
-                     <div key={i} className="h-36 bg-white rounded-xl border border-gray-100 p-4 animate-pulse">
+                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                   {[1,2,3,4,5,6].map(i => (
+                     <div key={i} className="h-44 bg-white rounded-xl border border-gray-100 p-4 animate-pulse flex flex-col">
                        <div className="flex justify-between mb-4">
                          <div className="space-y-2 flex-1">
                            <div className="h-4 bg-gray-200 rounded w-1/3"></div>
-                           <div className="h-3 bg-gray-100 rounded w-1/4"></div>
+                           <div className="h-3 bg-gray-100 rounded w-1/2"></div>
                          </div>
                          <div className="h-6 bg-gray-200 rounded w-20"></div>
                        </div>
-                       <div className="flex items-center gap-3 pt-4 border-t border-gray-50">
+                       <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-50">
                          <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
                          <div className="space-y-2 flex-1">
-                           <div className="h-3 bg-gray-200 rounded w-1/4"></div>
-                           <div className="h-2 bg-gray-100 rounded w-1/5"></div>
+                           <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                           <div className="h-2 bg-gray-100 rounded w-1/3"></div>
                          </div>
                        </div>
                      </div>
                    ))}
                  </div>
               ) : (
-                <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {searchResults.map(ride => (
                     <RideCard key={ride.id} ride={ride} onClick={() => handleRideClick(ride)} />
                   ))}
                   {searchResults.length === 0 && (
-                    <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-gray-200">
+                    <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-gray-200 md:col-span-2 xl:col-span-3">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Icons.Search className="text-gray-400" size={28} />
                       </div>
