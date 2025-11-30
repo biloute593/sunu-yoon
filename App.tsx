@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import CookieBanner from './components/CookieBanner';
@@ -8,6 +8,7 @@ import BookingModal from './components/BookingModal';
 import ChatWindow from './components/ChatWindow';
 import { Icons } from './components/Icons';
 import { rideService, Ride as ApiRide, RideSearchParams } from './services/rideService';
+import { locationService } from './services/locationService';
 import { Coordinates, LocationState, DraftRide } from './types';
 
 // Types adaptés pour le frontend
@@ -72,6 +73,121 @@ const mapApiRideToRide = (apiRide: ApiRide): Ride => {
 
 // --- COMPONENTS ---
 
+// Liste des villes principales du Sénégal pour l'autocomplétion
+const SENEGAL_CITIES = [
+  'Dakar', 'Thiès', 'Saint-Louis', 'Touba', 'Kaolack', 'Ziguinchor', 
+  'Rufisque', 'Mbour', 'Diourbel', 'Tambacounda', 'Kolda', 'Fatick',
+  'Louga', 'Matam', 'Kédougou', 'Sédhiou', 'Pikine', 'Guédiawaye',
+  'Saly', 'Somone', 'Joal-Fadiouth', 'Richard Toll', 'Podor', 'Vélingara',
+  'Bignona', 'Oussouye', 'Cap Skirring', 'Kafountine', 'Palmarin'
+];
+
+// Composant d'autocomplétion pour les villes
+const CityAutocomplete: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  icon?: React.ReactNode;
+  rightElement?: React.ReactNode;
+  required?: boolean;
+  label?: string;
+}> = ({ value, onChange, placeholder, icon, rightElement, required, label }) => {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputValue = e.target.value;
+    onChange(inputValue);
+    
+    if (inputValue.length >= 1) {
+      const filtered = SENEGAL_CITIES.filter(city =>
+        city.toLowerCase().includes(inputValue.toLowerCase())
+      ).slice(0, 6);
+      setSuggestions(filtered);
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+    setFocusedIndex(-1);
+  };
+
+  const handleSuggestionClick = (city: string) => {
+    onChange(city);
+    setShowSuggestions(false);
+    setSuggestions([]);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggestions) return;
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedIndex(prev => Math.min(prev + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' && focusedIndex >= 0) {
+      e.preventDefault();
+      handleSuggestionClick(suggestions[focusedIndex]);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+      <div className="relative">
+        {icon && (
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+            {icon}
+          </div>
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          onFocus={() => value.length >= 1 && suggestions.length > 0 && setShowSuggestions(true)}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+          placeholder={placeholder}
+          className={`w-full ${icon ? 'pl-10' : 'pl-4'} ${rightElement ? 'pr-10' : 'pr-4'} py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all outline-none text-gray-800 font-medium placeholder-gray-400`}
+          required={required}
+          autoComplete="off"
+        />
+        {rightElement && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            {rightElement}
+          </div>
+        )}
+      </div>
+      
+      {/* Suggestions dropdown */}
+      {showSuggestions && suggestions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          {suggestions.map((city, index) => (
+            <button
+              key={city}
+              type="button"
+              onClick={() => handleSuggestionClick(city)}
+              className={`w-full px-4 py-2.5 text-left hover:bg-emerald-50 flex items-center gap-2 transition-colors ${
+                index === focusedIndex ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700'
+              }`}
+            >
+              <Icons.MapPin size={14} className="text-gray-400" />
+              <span className="font-medium">{city}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SearchForm: React.FC<{ 
   onSearch: (params: SearchParams) => void, 
   isLoading: boolean,
@@ -86,9 +202,13 @@ const SearchForm: React.FC<{
 
   useEffect(() => {
     if (userLocation.coords && userLocation.address && !from) {
-      setFrom(userLocation.address);
+      // Extraire le nom de la ville de l'adresse
+      const cityMatch = userLocation.address.split(',')[0];
+      if (cityMatch && SENEGAL_CITIES.some(c => userLocation.address.includes(c))) {
+        setFrom(cityMatch);
+      }
     }
-  }, [userLocation.address, userLocation.coords]);
+  }, [userLocation.address, userLocation.coords, from]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,46 +223,42 @@ const SearchForm: React.FC<{
 
   return (
     <div className="bg-white p-4 md:p-6 rounded-xl shadow-xl w-full max-w-4xl mx-auto -mt-16 md:-mt-20 relative z-10 border border-gray-100">
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
-        <div className="relative group">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-emerald-600">
-            <Icons.MapPin size={20} />
-          </div>
-          <input
-            type="text"
-            placeholder="Départ (ex: Dakar)"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all outline-none text-gray-800 font-medium placeholder-gray-400"
-            required
-          />
-          <button
-            type="button"
-            onClick={onLocate}
-            title="Utiliser ma position actuelle"
-            className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full transition-colors ${userLocation.loading ? 'animate-spin text-emerald-600' : userLocation.coords ? 'text-emerald-600 bg-emerald-50' : 'text-gray-400 hover:text-emerald-600 hover:bg-gray-100'}`}
-          >
-            {userLocation.loading ? (
-               <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full" />
-            ) : (
-              <Icons.Crosshair size={18} />
-            )}
-          </button>
-        </div>
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <CityAutocomplete
+          value={from}
+          onChange={setFrom}
+          placeholder="Départ (ex: Dakar)"
+          icon={<Icons.MapPin size={20} />}
+          rightElement={
+            <button
+              type="button"
+              onClick={onLocate}
+              title="Utiliser ma position actuelle"
+              className={`p-1.5 rounded-full transition-colors ${
+                userLocation.loading 
+                  ? 'animate-spin text-emerald-600' 
+                  : userLocation.coords 
+                    ? 'text-emerald-600 bg-emerald-50' 
+                    : 'text-gray-400 hover:text-emerald-600 hover:bg-gray-100'
+              }`}
+            >
+              {userLocation.loading ? (
+                <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full" />
+              ) : (
+                <Icons.Crosshair size={18} />
+              )}
+            </button>
+          }
+          required
+        />
         
-        <div className="relative group">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-emerald-600">
-            <Icons.MapPin size={20} />
-          </div>
-          <input
-            type="text"
-            placeholder="Destination (ex: Touba)"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all outline-none text-gray-800 font-medium placeholder-gray-400"
-            required
-          />
-        </div>
+        <CityAutocomplete
+          value={to}
+          onChange={setTo}
+          placeholder="Destination (ex: Touba)"
+          icon={<Icons.MapPin size={20} />}
+          required
+        />
 
         <div className="grid grid-cols-2 gap-2">
           <div className="relative group">
@@ -152,6 +268,7 @@ const SearchForm: React.FC<{
             <input
               type="date"
               value={date}
+              min={new Date().toISOString().split('T')[0]}
               onChange={(e) => setDate(e.target.value)}
               className="w-full pl-10 pr-2 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all outline-none text-gray-800 font-medium text-sm"
               required
@@ -187,6 +304,14 @@ const SearchForm: React.FC<{
           )}
         </button>
       </form>
+      
+      {/* Message d'erreur de localisation */}
+      {userLocation.error && (
+        <div className="mt-3 flex items-center gap-2 text-amber-600 text-sm">
+          <Icons.AlertCircle size={16} />
+          <span>{userLocation.error}</span>
+        </div>
+      )}
     </div>
   );
 };
@@ -375,6 +500,67 @@ const RideDetails: React.FC<{
   );
 };
 
+const PublishCityInput: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}> = ({ value, onChange, placeholder }) => {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputValue = e.target.value;
+    onChange(inputValue);
+    
+    if (inputValue.length >= 1) {
+      const filtered = SENEGAL_CITIES.filter(city =>
+        city.toLowerCase().includes(inputValue.toLowerCase())
+      ).slice(0, 5);
+      setSuggestions(filtered);
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSuggestionClick = (city: string) => {
+    onChange(city);
+    setShowSuggestions(false);
+  };
+
+  return (
+    <div className="relative">
+      <Icons.MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={20} />
+      <input
+        type="text"
+        value={value}
+        onChange={handleInputChange}
+        onFocus={() => value.length >= 1 && suggestions.length > 0 && setShowSuggestions(true)}
+        onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+        placeholder={placeholder}
+        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+        autoComplete="off"
+      />
+      {showSuggestions && suggestions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          {suggestions.map((city) => (
+            <button
+              key={city}
+              type="button"
+              onClick={() => handleSuggestionClick(city)}
+              className="w-full px-4 py-2.5 text-left hover:bg-emerald-50 flex items-center gap-2 transition-colors text-gray-700"
+            >
+              <Icons.MapPin size={14} className="text-gray-400" />
+              <span className="font-medium">{city}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PublishForm: React.FC<{ 
   onPublish: (ride: DraftRide) => void, 
   onCancel: () => void,
@@ -506,36 +692,26 @@ const PublishForm: React.FC<{
       <div className="space-y-4">
         <div className="relative">
           <label className="block text-sm font-medium text-gray-700 mb-1">Lieu de départ</label>
-          <div className="relative">
-             <Icons.MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-             <input
-              type="text"
-              value={formData.origin}
-              onChange={(e) => handleChange('origin', e.target.value)}
-              placeholder="Ex: Dakar, Liberté 6"
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-             />
-          </div>
+          <PublishCityInput
+            value={formData.origin}
+            onChange={(val) => handleChange('origin', val)}
+            placeholder="Ex: Dakar, Liberté 6"
+          />
         </div>
         <div className="relative">
           <label className="block text-sm font-medium text-gray-700 mb-1">Lieu d'arrivée</label>
-          <div className="relative">
-             <Icons.MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-             <input
-              type="text"
-              value={formData.destination}
-              onChange={(e) => handleChange('destination', e.target.value)}
-              placeholder="Ex: Saint-Louis, Gare routière"
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-             />
-          </div>
+          <PublishCityInput
+            value={formData.destination}
+            onChange={(val) => handleChange('destination', val)}
+            placeholder="Ex: Saint-Louis, Gare routière"
+          />
         </div>
       </div>
       <div className="flex justify-end pt-4">
         <button
           disabled={!formData.origin || !formData.destination}
           onClick={() => setStep(2)}
-          className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700"
+          className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors"
         >
           Suivant
         </button>
@@ -904,56 +1080,68 @@ function AppContent() {
     error: null
   });
 
-  const handleGeolocate = () => {
-    if (!navigator.geolocation) {
-      setUserLocation(prev => ({ ...prev, error: "La géolocalisation n'est pas supportée." }));
-      return;
-    }
-
-    setUserLocation(prev => ({ ...prev, loading: true, error: null }));
-
-    // D'abord essayer avec une précision basse (plus rapide)
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
+  // Géolocalisation automatique au chargement (silencieuse)
+  useEffect(() => {
+    const initLocation = async () => {
+      try {
+        const result = await locationService.getCurrentPositionFast({
+          onStatusChange: (status) => {
+            if (status === 'searching') {
+              setUserLocation(prev => ({ ...prev, loading: true }));
+            }
+          }
+        });
+        
         setUserLocation({
-          coords: { lat: latitude, lng: longitude },
-          address: 'Ma position actuelle',
+          coords: result.coords,
+          address: result.address || 'Ma position',
           loading: false,
           error: null
         });
-        
-        // Ensuite, améliorer la précision en arrière-plan
-        navigator.geolocation.getCurrentPosition(
-          (precisePosition) => {
-            const { latitude: lat, longitude: lng } = precisePosition.coords;
-            setUserLocation(prev => ({
-              ...prev,
-              coords: { lat, lng }
-            }));
-          },
-          () => {}, // Ignorer les erreurs de haute précision
-          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-        );
-      },
-      (error) => {
-        let errorMsg = "Erreur de localisation.";
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMsg = "Vous avez refusé l'accès à la localisation.";
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMsg = "Position non disponible. Vérifiez votre GPS.";
-            break;
-          case error.TIMEOUT:
-            errorMsg = "La localisation a pris trop de temps.";
-            break;
+      } catch (error) {
+        // Silencieux en cas d'échec initial
+        console.log('Géolocalisation initiale:', error);
+      }
+    };
+    
+    // Lancer la géolocalisation après un court délai
+    const timer = setTimeout(initLocation, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleGeolocate = useCallback(async () => {
+    setUserLocation(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const result = await locationService.getCurrentPositionFast({
+        onStatusChange: (status) => {
+          if (status === 'error') {
+            setUserLocation(prev => ({ ...prev, loading: false }));
+          }
+        },
+        onLocationUpdate: (update) => {
+          // Mise à jour silencieuse de la précision
+          setUserLocation(prev => ({
+            ...prev,
+            coords: update.coords
+          }));
         }
-        setUserLocation(prev => ({ ...prev, loading: false, error: errorMsg }));
-      },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
-    );
-  };
+      });
+
+      setUserLocation({
+        coords: result.coords,
+        address: result.address || 'Ma position',
+        loading: false,
+        error: null
+      });
+    } catch (error: any) {
+      setUserLocation(prev => ({
+        ...prev,
+        loading: false,
+        error: error.message || "Erreur de localisation"
+      }));
+    }
+  }, []);
 
   const handleSearch = async (params: SearchParams) => {
     setIsLoading(true);
@@ -1006,17 +1194,59 @@ function AppContent() {
       case 'home':
         return (
           <>
-            <div className="bg-emerald-600 text-white py-20 px-4 md:py-32 relative overflow-hidden">
+            <div className="bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white py-20 px-4 md:py-32 relative overflow-hidden">
                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                <div className="absolute bottom-0 left-0 w-48 h-48 bg-yellow-400/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+               <div className="absolute top-1/2 left-1/4 w-32 h-32 bg-white/5 rounded-full blur-2xl animate-pulse"></div>
                
                <div className="max-w-6xl mx-auto relative z-10 text-center">
-                 <h1 className="text-4xl md:text-6xl font-extrabold mb-6 tracking-tight">
-                   Votre voyage commence ici.
+                 <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium mb-6">
+                   <span className="relative flex h-2 w-2">
+                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                     <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-400"></span>
+                   </span>
+                   +500 trajets disponibles aujourd'hui
+                 </div>
+                 <h1 className="text-4xl md:text-6xl font-extrabold mb-6 tracking-tight leading-tight">
+                   Votre voyage commence<br className="hidden md:block" /> <span className="text-yellow-300">ici.</span>
                  </h1>
-                 <p className="text-xl md:text-2xl text-emerald-100 mb-12 max-w-2xl mx-auto">
+                 <p className="text-xl md:text-2xl text-emerald-100 mb-8 max-w-2xl mx-auto">
                    Rejoignez la plus grande communauté de covoiturage au Sénégal. Économique, convivial et sûr.
                  </p>
+                 
+                 {/* Quick action buttons */}
+                 <div className="flex flex-wrap justify-center gap-4 mb-8">
+                   <button
+                     onClick={() => setCurrentView('publish')}
+                     className="flex items-center gap-2 bg-white text-emerald-600 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+                   >
+                     <Icons.PlusCircle size={20} />
+                     Proposer un trajet
+                   </button>
+                   <button
+                     onClick={() => document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' })}
+                     className="flex items-center gap-2 bg-emerald-700/50 backdrop-blur-sm text-white px-6 py-3 rounded-full font-bold border border-white/20 hover:bg-emerald-700/70 transition-all"
+                   >
+                     <Icons.Search size={20} />
+                     Trouver un trajet
+                   </button>
+                 </div>
+                 
+                 {/* Stats */}
+                 <div className="flex justify-center gap-8 md:gap-16 mt-8 text-center">
+                   <div>
+                     <div className="text-3xl md:text-4xl font-bold text-white">15K+</div>
+                     <div className="text-emerald-200 text-sm">Utilisateurs</div>
+                   </div>
+                   <div>
+                     <div className="text-3xl md:text-4xl font-bold text-white">50K+</div>
+                     <div className="text-emerald-200 text-sm">Trajets réalisés</div>
+                   </div>
+                   <div>
+                     <div className="text-3xl md:text-4xl font-bold text-white">4.8</div>
+                     <div className="text-emerald-200 text-sm">⭐ Note moyenne</div>
+                   </div>
+                 </div>
                </div>
             </div>
             
@@ -1085,6 +1315,38 @@ function AppContent() {
                        <h3 className="text-lg font-bold mb-2">Prix bas</h3>
                        <p className="text-gray-600">Voyagez moins cher qu'en bus ou taxi '7 places'.</p>
                     </div>
+                 </div>
+               </div>
+
+               {/* Trajets populaires */}
+               <div className="max-w-6xl mx-auto mt-20">
+                 <h2 className="text-2xl font-bold text-gray-900 mb-8">🔥 Trajets populaires</h2>
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[
+                      { from: 'Dakar', to: 'Touba', price: '3 500' },
+                      { from: 'Dakar', to: 'Saint-Louis', price: '4 000' },
+                      { from: 'Dakar', to: 'Thiès', price: '1 500' },
+                      { from: 'Dakar', to: 'Mbour', price: '2 000' },
+                      { from: 'Dakar', to: 'Kaolack', price: '3 000' },
+                      { from: 'Dakar', to: 'Ziguinchor', price: '7 500' },
+                      { from: 'Thiès', to: 'Touba', price: '2 500' },
+                      { from: 'Saint-Louis', to: 'Dakar', price: '4 000' },
+                    ].map((route, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleSearch({ origin: route.from, destination: route.to, date: new Date().toISOString().split('T')[0], passengers: 1 })}
+                        className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-emerald-200 transition-all text-left group"
+                      >
+                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                          <span className="font-medium text-gray-900">{route.from}</span>
+                          <Icons.ChevronRight size={14} className="text-gray-400 group-hover:text-emerald-500 transition-colors" />
+                          <span className="font-medium text-gray-900">{route.to}</span>
+                        </div>
+                        <div className="text-emerald-600 font-bold">
+                          à partir de {route.price} XOF
+                        </div>
+                      </button>
+                    ))}
                  </div>
                </div>
             </div>
