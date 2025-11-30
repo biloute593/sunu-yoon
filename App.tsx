@@ -319,41 +319,51 @@ const SearchForm: React.FC<{
 const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick }) => {
   const departureDate = new Date(ride.departureTime);
   const timeString = departureDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const dateString = departureDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
     <div 
       onClick={onClick}
-      className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow cursor-pointer group"
+      className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-lg hover:border-emerald-200 transition-all cursor-pointer group"
     >
       <div className="flex justify-between items-start mb-4">
-        <div className="flex flex-col relative pl-4 border-l-2 border-gray-200 space-y-4">
+        <div className="flex flex-col relative pl-5 border-l-2 border-emerald-200 space-y-4">
           <div className="relative">
-            <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full border-2 border-white bg-white ring-2 ring-emerald-600"></div>
+            <div className="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-emerald-100"></div>
             <div className="flex flex-col">
-              <span className="font-bold text-gray-900">{timeString}</span>
-              <span className="text-gray-600 text-sm">{ride.origin}</span>
+              <span className="text-lg font-bold text-gray-900">{timeString}</span>
+              <span className="text-gray-600">{ride.origin}</span>
             </div>
           </div>
-          <div className="relative">
-             <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full border-2 border-white bg-white ring-2 ring-emerald-600"></div>
-             <div className="flex flex-col">
-              <span className="font-bold text-gray-900 text-sm opacity-50">{ride.duration}</span>
-            </div>
+          <div className="relative pl-0 text-xs text-gray-400 flex items-center gap-1">
+            <Icons.Clock size={12} />
+            {ride.duration}
           </div>
-           <div className="relative">
-            <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full border-2 border-white bg-gray-900"></div>
+          <div className="relative">
+            <div className="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-gray-800 ring-4 ring-gray-100"></div>
             <div className="flex flex-col">
-              <span className="text-gray-600 text-sm">{ride.destination}</span>
+              <span className="text-gray-600">{ride.destination}</span>
             </div>
           </div>
         </div>
         <div className="text-right">
           <span className="block text-2xl font-bold text-emerald-600">
-            {ride.price.toLocaleString('fr-FR')} {ride.currency}
+            {ride.price.toLocaleString('fr-FR')}
           </span>
-          <span className="text-xs text-gray-400">par place</span>
+          <span className="text-xs text-gray-400">{ride.currency}</span>
         </div>
       </div>
+
+      {/* Features tags */}
+      {ride.features.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-4">
+          {ride.features.slice(0, 3).map(f => (
+            <span key={f} className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+              {f === 'Climatisation' ? '❄️' : f === 'Musique' ? '🎵' : f === 'Bagages acceptés' ? '🧳' : f === 'Non-fumeur' ? '🚭' : '✓'} {f}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center justify-between pt-4 border-t border-gray-50">
         <div className="flex items-center gap-3">
@@ -361,11 +371,11 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
             <img 
               src={ride.driver.avatarUrl} 
               alt={ride.driver.name} 
-              className="w-10 h-10 rounded-full object-cover border border-gray-200"
+              className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-sm"
             />
             {ride.driver.isVerified && (
-              <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5">
-                <Icons.CheckCircle size={14} className="text-blue-500 fill-white" />
+              <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm">
+                <Icons.CheckCircle size={14} className="text-blue-500 fill-blue-100" />
               </div>
             )}
           </div>
@@ -374,14 +384,17 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
             <div className="flex items-center gap-1 text-xs text-gray-500">
               <Icons.Star size={12} className="text-yellow-400 fill-yellow-400" />
               <span className="font-medium text-gray-700">{ride.driver.rating}</span>
-              <span>({ride.driver.reviewCount} avis)</span>
+              <span className="text-gray-400">({ride.driver.reviewCount})</span>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
+        <div className="flex items-center gap-3">
+          <span className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full font-medium">
             {ride.seatsAvailable} place{ride.seatsAvailable > 1 ? 's' : ''}
           </span>
+          <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
+            <Icons.ChevronRight size={18} className="text-gray-400 group-hover:text-emerald-600 transition-colors" />
+          </div>
         </div>
       </div>
     </div>
@@ -1291,6 +1304,39 @@ function AppContent() {
                   </div>
                </div>
 
+               {/* Comment ça marche */}
+               <div className="max-w-6xl mx-auto mt-20">
+                 <div className="text-center mb-12">
+                   <h2 className="text-2xl font-bold text-gray-900 mb-4">Comment ça marche ?</h2>
+                   <p className="text-gray-600 max-w-xl mx-auto">En 3 étapes simples, trouvez ou proposez un trajet</p>
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="text-center relative">
+                       <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold shadow-sm">
+                         1
+                       </div>
+                       <h3 className="text-lg font-bold mb-2 text-gray-900">Recherchez</h3>
+                       <p className="text-gray-600 text-sm">Indiquez votre départ, destination et date. Trouvez les trajets disponibles.</p>
+                       <div className="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-emerald-200"></div>
+                    </div>
+                    <div className="text-center relative">
+                       <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold shadow-sm">
+                         2
+                       </div>
+                       <h3 className="text-lg font-bold mb-2 text-gray-900">Réservez</h3>
+                       <p className="text-gray-600 text-sm">Choisissez votre trajet, réservez vos places et payez en ligne ou en espèces.</p>
+                       <div className="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-emerald-200"></div>
+                    </div>
+                    <div className="text-center">
+                       <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold shadow-sm">
+                         3
+                       </div>
+                       <h3 className="text-lg font-bold mb-2 text-gray-900">Voyagez</h3>
+                       <p className="text-gray-600 text-sm">Retrouvez votre conducteur au point de rendez-vous et profitez du trajet !</p>
+                    </div>
+                 </div>
+               </div>
+
                <div className="max-w-6xl mx-auto mt-20">
                  <h2 className="text-2xl font-bold text-gray-900 mb-8">Pourquoi utiliser Sunu Yoon ?</h2>
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -1365,13 +1411,59 @@ function AppContent() {
             />
             
             <div className="mt-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                {isLoading ? 'Recherche en cours...' : `${searchResults.length} trajets disponibles`}
-              </h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">
+                  {isLoading ? 'Recherche en cours...' : `${searchResults.length} trajet${searchResults.length > 1 ? 's' : ''} disponible${searchResults.length > 1 ? 's' : ''}`}
+                </h2>
+                {searchResults.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500">Trier par:</span>
+                    <select className="text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                      <option value="departure">Heure de départ</option>
+                      <option value="price">Prix croissant</option>
+                      <option value="rating">Meilleures notes</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+              
+              {/* Quick filters */}
+              {searchResults.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-6">
+                  <button className="px-3 py-1.5 text-sm font-medium bg-emerald-100 text-emerald-700 rounded-full hover:bg-emerald-200 transition-colors">
+                    Tous
+                  </button>
+                  <button className="px-3 py-1.5 text-sm font-medium bg-white text-gray-600 border border-gray-200 rounded-full hover:border-emerald-300 hover:text-emerald-600 transition-colors">
+                    ❄️ Climatisation
+                  </button>
+                  <button className="px-3 py-1.5 text-sm font-medium bg-white text-gray-600 border border-gray-200 rounded-full hover:border-emerald-300 hover:text-emerald-600 transition-colors">
+                    🧳 Bagages
+                  </button>
+                  <button className="px-3 py-1.5 text-sm font-medium bg-white text-gray-600 border border-gray-200 rounded-full hover:border-emerald-300 hover:text-emerald-600 transition-colors">
+                    ⭐ 4+ étoiles
+                  </button>
+                </div>
+              )}
+              
               {isLoading ? (
                  <div className="space-y-4">
                    {[1,2,3].map(i => (
-                     <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse"></div>
+                     <div key={i} className="h-36 bg-white rounded-xl border border-gray-100 p-4 animate-pulse">
+                       <div className="flex justify-between mb-4">
+                         <div className="space-y-2 flex-1">
+                           <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                           <div className="h-3 bg-gray-100 rounded w-1/4"></div>
+                         </div>
+                         <div className="h-6 bg-gray-200 rounded w-20"></div>
+                       </div>
+                       <div className="flex items-center gap-3 pt-4 border-t border-gray-50">
+                         <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                         <div className="space-y-2 flex-1">
+                           <div className="h-3 bg-gray-200 rounded w-1/4"></div>
+                           <div className="h-2 bg-gray-100 rounded w-1/5"></div>
+                         </div>
+                       </div>
+                     </div>
                    ))}
                  </div>
               ) : (
@@ -1380,10 +1472,21 @@ function AppContent() {
                     <RideCard key={ride.id} ride={ride} onClick={() => handleRideClick(ride)} />
                   ))}
                   {searchResults.length === 0 && (
-                    <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                      <Icons.Search className="mx-auto h-12 w-12 text-gray-300 mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900">Aucun trajet trouvé</h3>
-                      <p className="text-gray-500 mt-2">Essayez de changer la date ou la destination.</p>
+                    <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-gray-200">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Icons.Search className="text-gray-400" size={28} />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun trajet trouvé</h3>
+                      <p className="text-gray-500 mb-6 max-w-sm mx-auto">
+                        Essayez de changer la date ou vérifiez l'orthographe des villes.
+                      </p>
+                      <button
+                        onClick={() => setCurrentView('publish')}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors"
+                      >
+                        <Icons.PlusCircle size={18} />
+                        Proposer ce trajet
+                      </button>
                     </div>
                   )}
                 </div>
