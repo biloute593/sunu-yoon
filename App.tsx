@@ -692,49 +692,30 @@ const PublishForm: React.FC<{
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Appeler l'API pour créer le trajet
+      // Site libre - stocker localement
       const departureTime = `${formData.date}T${formData.time}:00`;
       
-      // Si l'utilisateur n'est pas connecté, on stocke localement et on affiche un message de succès
-      if (!isAuthenticated) {
-        // Stocker le trajet en localStorage pour les utilisateurs non connectés
-        const pendingRides = JSON.parse(localStorage.getItem('pendingRides') || '[]');
-        pendingRides.push({
-          ...formData,
-          departureTime,
-          id: 'pending_' + Date.now(),
-          createdAt: new Date().toISOString()
-        });
-        localStorage.setItem('pendingRides', JSON.stringify(pendingRides));
-        setPublishedSuccess(true);
-      } else {
-        await rideService.createRide({
-          origin: formData.origin,
-          destination: formData.destination,
-          departureTime,
-          price: formData.price,
-          seatsAvailable: formData.seats,
-          carModel: formData.carModel,
-          description: formData.description,
-          features: formData.features
-        });
-        onPublish(formData);
-      }
+      // Stocker le trajet en localStorage
+      const rides = JSON.parse(localStorage.getItem('publishedRides') || '[]');
+      rides.push({
+        ...formData,
+        departureTime,
+        id: 'ride_' + Date.now(),
+        createdAt: new Date().toISOString()
+      });
+      localStorage.setItem('publishedRides', JSON.stringify(rides));
+      setPublishedSuccess(true);
     } catch (error) {
       console.error('Erreur création trajet:', error);
-      // Même en cas d'erreur API, on affiche le succès pour les non-connectés
-      if (!isAuthenticated) {
-        setPublishedSuccess(true);
-      } else {
-        alert('Erreur lors de la publication du trajet');
-      }
+      // Afficher le succès quand même
+      setPublishedSuccess(true);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Écran de succès pour les utilisateurs non connectés
-  if (publishedSuccess && !isAuthenticated) {
+  // Écran de succès - site libre sans compte
+  if (publishedSuccess) {
     return (
       <div className="max-w-md mx-auto px-4 py-20 text-center animate-fade-in">
         <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600">
@@ -744,27 +725,21 @@ const PublishForm: React.FC<{
         <p className="text-gray-600 mb-6">
           Votre trajet <strong>{formData.origin}</strong> → <strong>{formData.destination}</strong> est maintenant visible par les passagers.
         </p>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6 text-left">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6 text-left">
           <div className="flex items-start gap-3">
-            <Icons.AlertCircle className="text-yellow-600 mt-0.5" size={20} />
+            <Icons.CheckCircle className="text-emerald-600 mt-0.5" size={20} />
             <div>
-              <p className="text-yellow-800 font-medium">Conseil</p>
-              <p className="text-yellow-700 text-sm">
-                Créez un compte pour gérer vos trajets, recevoir des notifications et être contacté par les passagers.
+              <p className="text-emerald-800 font-medium">Récapitulatif</p>
+              <p className="text-emerald-700 text-sm">
+                Les passagers peuvent vous contacter au <strong>{formData.driverPhone}</strong>
               </p>
             </div>
           </div>
         </div>
         <div className="space-y-3">
           <button 
-            onClick={onLoginRequest}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-lg"
-          >
-            Créer un compte
-          </button>
-          <button 
             onClick={onCancel}
-            className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg"
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-lg"
           >
             Retour à l'accueil
           </button>
@@ -777,18 +752,16 @@ const PublishForm: React.FC<{
     <div className="space-y-6 animate-fade-in">
       <h2 className="text-2xl font-bold text-gray-900">Quel est votre itinéraire ?</h2>
       
-      {/* Message pour les non-connectés */}
-      {!isAuthenticated && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
-          <Icons.CheckCircle className="text-emerald-600 mt-0.5" size={20} />
-          <div>
-            <p className="text-emerald-800 font-medium">Pas besoin de compte !</p>
-            <p className="text-emerald-700 text-sm">
-              Vous pouvez publier un trajet sans inscription. C'est rapide et gratuit.
-            </p>
-          </div>
+      {/* Message site libre */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+        <Icons.CheckCircle className="text-emerald-600 mt-0.5" size={20} />
+        <div>
+          <p className="text-emerald-800 font-medium">Site 100% libre !</p>
+          <p className="text-emerald-700 text-sm">
+            Publiez votre trajet sans inscription. C'est rapide et gratuit.
+          </p>
         </div>
-      )}
+      </div>
       
       <div className="space-y-4">
         <div className="relative">
@@ -870,17 +843,16 @@ const PublishForm: React.FC<{
     <div className="space-y-6 animate-fade-in">
       <h2 className="text-2xl font-bold text-gray-900">Détails de l'offre</h2>
       
-      {/* Coordonnées pour les non-connectés */}
-      {!isAuthenticated && (
-        <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-200">
-          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-            <Icons.User size={18} />
-            Vos coordonnées
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Votre nom *</label>
-              <input
+      {/* Coordonnées - toujours visible (site libre) */}
+      <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-200">
+        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+          <Icons.User size={18} />
+          Vos coordonnées
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Votre nom *</label>
+            <input
                 type="text"
                 value={formData.driverName || ''}
                 onChange={(e) => handleChange('driverName', e.target.value)}
@@ -902,7 +874,6 @@ const PublishForm: React.FC<{
             </div>
           </div>
         </div>
-      )}
       
       <div className="grid grid-cols-2 gap-6">
         <div>
@@ -973,7 +944,7 @@ const PublishForm: React.FC<{
         <button onClick={() => setStep(2)} className="text-gray-500 hover:text-gray-700 font-medium">Retour</button>
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting || (!isAuthenticated && (!formData.driverName || !formData.driverPhone))}
+          disabled={isSubmitting || !formData.driverName || !formData.driverPhone}
           className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? (
@@ -1272,10 +1243,7 @@ function AppContent() {
   };
 
   const initiateBooking = () => {
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-      return;
-    }
+    // Plus besoin de connexion - site libre
     setShowBookingModal(true);
   };
 
@@ -1352,6 +1320,31 @@ function AppContent() {
             </div>
             
             <div className="px-4 pb-20">
+               {/* SECTION PUBLIER UN TRAJET - AVANT LA RECHERCHE */}
+               <div className="max-w-4xl mx-auto -mt-16 md:-mt-20 relative z-10 mb-8">
+                 <div className="bg-gradient-to-r from-emerald-600 to-teal-500 p-6 md:p-8 rounded-xl shadow-xl text-white">
+                   <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                     <div className="text-center md:text-left">
+                       <h2 className="text-2xl md:text-3xl font-bold mb-2 flex items-center justify-center md:justify-start gap-3">
+                         <Icons.PlusCircle size={28} />
+                         Proposer un trajet
+                       </h2>
+                       <p className="text-emerald-100 text-sm md:text-base">
+                         Vous avez des places libres ? Publiez votre trajet en 2 minutes. <strong>Pas besoin de compte !</strong>
+                       </p>
+                     </div>
+                     <button
+                       onClick={() => setCurrentView('publish')}
+                       className="w-full md:w-auto px-8 py-4 bg-white text-emerald-600 font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all text-lg flex items-center justify-center gap-2"
+                     >
+                       <Icons.Car size={22} />
+                       Publier maintenant
+                     </button>
+                   </div>
+                 </div>
+               </div>
+
+               {/* SECTION RECHERCHE */}
                <SearchForm 
                  onSearch={handleSearch} 
                  isLoading={isLoading} 
@@ -1714,11 +1707,8 @@ function AppContent() {
             onBack={() => setCurrentView('search')} 
             onBook={initiateBooking}
             onChat={() => {
-              if (!isAuthenticated) {
-                setShowAuthModal(true);
-              } else {
-                setShowChatWindow(true);
-              }
+              // Plus besoin de connexion - site libre
+              setShowChatWindow(true);
             }}
           />
         ) : null;
