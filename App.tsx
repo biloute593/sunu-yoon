@@ -6,6 +6,7 @@ import Map from './components/Map';
 import AuthModal from './components/AuthModal';
 import BookingModal from './components/BookingModal';
 import ChatWindow from './components/ChatWindow';
+import FAQSection from './components/FAQ';
 import { Icons } from './components/Icons';
 import { rideService, Ride as ApiRide, RideSearchParams } from './services/rideService';
 import { locationService } from './services/locationService';
@@ -1578,6 +1579,11 @@ function AppContent() {
                      </div>
                    </div>
                  </div>
+               </div>
+
+               {/* FAQ Section */}
+               <div className="max-w-6xl mx-auto mt-20 px-4">
+                 <FAQSection />
                </div>
 
                {/* Stats rapides */}
