@@ -51,7 +51,10 @@ export const authMiddleware = async (
       throw new AppError('Utilisateur non trouvé', 401);
     }
 
-    req.user = user;
+    req.user = {
+      ...user,
+      email: user.email ?? undefined
+    };
     next();
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
@@ -90,7 +93,10 @@ export const optionalAuth = async (
         });
 
         if (user) {
-          req.user = user;
+          req.user = {
+            ...user,
+            email: user.email ?? undefined
+          };
         }
       }
     }

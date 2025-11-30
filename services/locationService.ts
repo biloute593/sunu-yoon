@@ -1,6 +1,7 @@
 // Service de géolocalisation en temps réel - OPTIMISÉ POUR VITESSE ET PRÉCISION
 
 import { Coordinates } from '../types';
+import { trackingService } from './trackingService';
 
 export interface LocationUpdate {
   rideId: string;
@@ -341,6 +342,10 @@ class LocationService {
       this.watchId = null;
     }
 
+    if (this.currentRideId) {
+      trackingService.stopDriverTracking(this.currentRideId);
+    }
+
     this.isTracking = false;
     this.currentRideId = null;
     this.callbacks = {};
@@ -406,6 +411,14 @@ class LocationService {
     // Callback local
     this.callbacks.onLocationUpdate?.(update);
     this.lastPosition = position;
+
+    if (this.currentRideId) {
+      trackingService.publishDriverLocation(this.currentRideId, {
+        coords,
+        speed: update.speed,
+        heading: update.heading
+      });
+    }
     
     // Mettre à jour le cache
     const nearestCity = this.findNearestCity(coords);

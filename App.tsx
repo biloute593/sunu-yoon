@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import CookieBanner from './components/CookieBanner';
-import Map from './components/Map';
 import AuthModal from './components/AuthModal';
 import BookingModal from './components/BookingModal';
 import ChatWindow from './components/ChatWindow';
 import FAQSection from './components/FAQ';
 import { Icons } from './components/Icons';
+import LiveTrackingPanel from './components/LiveTrackingPanel';
 import { rideService, Ride as ApiRide, RideSearchParams } from './services/rideService';
 import { locationService } from './services/locationService';
 import { Coordinates, LocationState, DraftRide } from './types';
@@ -665,10 +665,8 @@ const PublishCityInput: React.FC<{
 const PublishForm: React.FC<{ 
   onPublish: (ride: DraftRide) => void, 
   onCancel: () => void,
-  isAuthenticated?: boolean,
-  onLoginRequest?: () => void
-}> = ({ onPublish, onCancel, isAuthenticated = false, onLoginRequest }) => {
-  const [step, setStep] = useState(1);
+  isAuthenticated?: boolean
+}> = ({ onPublish, onCancel, isAuthenticated = false }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [publishedSuccess, setPublishedSuccess] = useState(false);
   const [formData, setFormData] = useState<DraftRide & { driverName?: string; driverPhone?: string }>({
@@ -757,12 +755,6 @@ const PublishForm: React.FC<{
         </div>
         <div className="space-y-3">
           <button 
-            onClick={onLoginRequest}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-lg"
-          >
-            Créer un compte
-          </button>
-          <button 
             onClick={onCancel}
             className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg"
           >
@@ -773,241 +765,360 @@ const PublishForm: React.FC<{
     );
   }
 
-  const renderStep1 = () => (
-    <div className="space-y-6 animate-fade-in">
-      <h2 className="text-2xl font-bold text-gray-900">Quel est votre itinéraire ?</h2>
-      
-      {/* Message pour les non-connectés */}
-      {!isAuthenticated && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
-          <Icons.CheckCircle className="text-emerald-600 mt-0.5" size={20} />
-          <div>
-            <p className="text-emerald-800 font-medium">Pas besoin de compte !</p>
-            <p className="text-emerald-700 text-sm">
-              Vous pouvez publier un trajet sans inscription. C'est rapide et gratuit.
-            </p>
-          </div>
-        </div>
-      )}
-      
-      <div className="space-y-4">
-        <div className="relative">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Lieu de départ</label>
-          <PublishCityInput
-            value={formData.origin}
-            onChange={(val) => handleChange('origin', val)}
-            placeholder="Ex: Dakar, Liberté 6"
-          />
-        </div>
-        <div className="relative">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Lieu d'arrivée</label>
-          <PublishCityInput
-            value={formData.destination}
-            onChange={(val) => handleChange('destination', val)}
-            placeholder="Ex: Saint-Louis, Gare routière"
-          />
-        </div>
-      </div>
-      <div className="flex justify-end pt-4">
-        <button
-          disabled={!formData.origin || !formData.destination}
-          onClick={() => setStep(2)}
-          className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors"
-        >
-          Suivant
-        </button>
-      </div>
-    </div>
+  const minDate = new Date().toISOString().split('T')[0];
+  const featureOptions = ['Climatisation', 'Bagages acceptés', 'Non-fumeur', 'Musique', 'Animaux acceptés'];
+  const isFormValid = Boolean(
+    formData.origin &&
+    formData.destination &&
+    formData.date &&
+    formData.time &&
+    (isAuthenticated || (formData.driverName && formData.driverPhone))
   );
-
-  const renderStep2 = () => (
-    <div className="space-y-6 animate-fade-in">
-      <h2 className="text-2xl font-bold text-gray-900">Quand partez-vous ?</h2>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-          <input
-            type="date"
-            value={formData.date}
-            onChange={(e) => handleChange('date', e.target.value)}
-            min={new Date().toISOString().split('T')[0]}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Heure</label>
-          <input
-            type="time"
-            value={formData.time}
-            onChange={(e) => handleChange('time', e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-          />
-        </div>
-      </div>
-       <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Véhicule</label>
-          <input
-            type="text"
-            value={formData.carModel}
-            onChange={(e) => handleChange('carModel', e.target.value)}
-            placeholder="Ex: Peugeot 308, Toyota Corolla..."
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-          />
-        </div>
-      <div className="flex justify-between pt-4">
-        <button onClick={() => setStep(1)} className="text-gray-500 hover:text-gray-700 font-medium">Retour</button>
-        <button
-          onClick={() => setStep(3)}
-          className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700"
-        >
-          Suivant
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderStep3 = () => (
-    <div className="space-y-6 animate-fade-in">
-      <h2 className="text-2xl font-bold text-gray-900">Détails de l'offre</h2>
-      
-      {/* Coordonnées pour les non-connectés */}
-      {!isAuthenticated && (
-        <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-200">
-          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-            <Icons.User size={18} />
-            Vos coordonnées
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Votre nom *</label>
-              <input
-                type="text"
-                value={formData.driverName || ''}
-                onChange={(e) => handleChange('driverName', e.target.value)}
-                placeholder="Ex: Moussa Diop"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone *</label>
-              <input
-                type="tel"
-                value={formData.driverPhone || ''}
-                onChange={(e) => handleChange('driverPhone', e.target.value)}
-                placeholder="Ex: 77 123 45 67"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                required
-              />
-            </div>
-          </div>
-        </div>
-      )}
-      
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-           <label className="block text-sm font-medium text-gray-700 mb-1">Prix par passager (XOF)</label>
-           <div className="flex items-center gap-4">
-              <button 
-                onClick={() => handleChange('price', Math.max(500, formData.price - 500))}
-                className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
-              >-</button>
-              <span className="text-xl font-bold text-emerald-600 w-20 text-center">{formData.price}</span>
-              <button 
-                onClick={() => handleChange('price', formData.price + 500)}
-                className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
-              >+</button>
-           </div>
-        </div>
-        <div>
-           <label className="block text-sm font-medium text-gray-700 mb-1">Places disponibles</label>
-           <div className="flex items-center gap-4">
-              <button 
-                onClick={() => handleChange('seats', Math.max(1, formData.seats - 1))}
-                className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
-              >-</button>
-              <span className="text-xl font-bold text-gray-900 w-12 text-center">{formData.seats}</span>
-              <button 
-                onClick={() => handleChange('seats', Math.min(7, formData.seats + 1))}
-                className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
-              >+</button>
-           </div>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Options</label>
-        <div className="flex flex-wrap gap-2">
-          {['Climatisation', 'Bagages acceptés', 'Non-fumeur', 'Musique', 'Animaux acceptés'].map(opt => (
-            <button
-              key={opt}
-              onClick={() => {
-                const newFeatures = formData.features.includes(opt) 
-                  ? formData.features.filter(f => f !== opt)
-                  : [...formData.features, opt];
-                handleChange('features', newFeatures);
-              }}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors border ${
-                formData.features.includes(opt) 
-                ? 'bg-emerald-100 text-emerald-700 border-emerald-200' 
-                : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optionnel)</label>
-        <textarea
-          value={formData.description}
-          onChange={(e) => handleChange('description', e.target.value)}
-          placeholder="Dites-en plus sur votre trajet..."
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none h-24 resize-none"
-        />
-      </div>
-
-      <div className="flex justify-between pt-4">
-        <button onClick={() => setStep(2)} className="text-gray-500 hover:text-gray-700 font-medium">Retour</button>
-        <button
-          onClick={handleSubmit}
-          disabled={isSubmitting || (!isAuthenticated && (!formData.driverName || !formData.driverPhone))}
-          className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSubmitting ? (
-            <>
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              Publication...
-            </>
-          ) : (
-            'Publier le trajet'
-          )}
-        </button>
-      </div>
-    </div>
-  );
+  const previewDate = formData.date ? new Date(`${formData.date}T${formData.time || '00:00'}`) : null;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-xl font-bold text-gray-500">Publication</h1>
-          <span className="text-sm font-medium text-emerald-600">Étape {step}/3</span>
-        </div>
-        <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-emerald-500 transition-all duration-300 ease-out"
-            style={{ width: `${(step / 3) * 100}%` }}
-          ></div>
+    <div className="max-w-6xl mx-auto px-4 py-10 space-y-8 animate-fade-in">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-gray-900 via-emerald-700 to-emerald-500 text-white p-8 shadow-2xl">
+        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at top, rgba(255,255,255,0.4), transparent 55%)' }}></div>
+        <div className="relative flex flex-col lg:flex-row gap-8 lg:items-center">
+          <div className="flex-1 space-y-4">
+            <p className="text-xs uppercase tracking-[0.3em] text-white/70">Publier un trajet</p>
+            <h1 className="text-3xl md:text-4xl font-bold leading-tight">Une interface premium pour annoncer votre trajet</h1>
+            <p className="text-white/80 text-base md:text-lg max-w-2xl">
+              Renseignez votre itinéraire, vos disponibilités et vos options confort. Votre annonce sera immédiatement visible par des centaines de passagers SUNU YOON.
+            </p>
+            <div className="flex flex-wrap gap-6 text-sm text-white/80">
+              <div>
+                <p className="text-2xl font-bold text-white">{formData.seats}</p>
+                <p>Places prévues</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{formData.price.toLocaleString('fr-FR')}</p>
+                <p>Prix/passager (XOF)</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{formData.features.length}</p>
+                <p>Options activées</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur">
+            <p className="text-white/70 text-xs uppercase tracking-widest mb-2">Votre trajet</p>
+            <div className="text-lg font-semibold">
+              {formData.origin || 'Départ'}
+              <span className="mx-2 text-white/60">→</span>
+              {formData.destination || 'Arrivée'}
+            </div>
+            <p className="text-sm text-white/80 mt-2">
+              {previewDate ? previewDate.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'Date et heure à définir'}
+            </p>
+            <p className="text-sm text-white/80 mt-1">{formData.carModel || 'Modèle de véhicule non renseigné'}</p>
+          </div>
+          <button
+            onClick={onCancel}
+            className="absolute top-6 right-6 text-sm font-medium text-white/80 hover:text-white flex items-center gap-2"
+          >
+            <Icons.ChevronRight className="rotate-180" size={16} />
+            Retour
+          </button>
         </div>
       </div>
-      
-      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-lg border border-gray-100">
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
+
+      {!isAuthenticated && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex flex-col md:flex-row gap-4 md:items-center">
+          <div className="flex items-center gap-3 text-emerald-800 font-semibold">
+            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-emerald-600">
+              <Icons.CheckCircle size={20} />
+            </div>
+            Publiez gratuitement sans compte
+          </div>
+          <p className="text-sm text-emerald-800 flex-1">Nous utiliserons votre nom et numéro pour informer les passagers intéressés. Créez un compte plus tard pour gérer vos annonces.</p>
+        </div>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-[1.7fr_1fr]">
+        <div className="space-y-6">
+          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Itinéraire</p>
+                <h2 className="text-2xl font-bold text-gray-900 mt-2">Points de départ et d'arrivée</h2>
+              </div>
+              <span className="text-xs font-semibold text-gray-400">1/3</span>
+            </div>
+            <div className="grid gap-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">Lieu de départ*</label>
+                <PublishCityInput
+                  value={formData.origin}
+                  onChange={(val) => handleChange('origin', val)}
+                  placeholder="Ex: Dakar, Liberté 6"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">Lieu d'arrivée*</label>
+                <PublishCityInput
+                  value={formData.destination}
+                  onChange={(val) => handleChange('destination', val)}
+                  placeholder="Ex: Saint-Louis, Gare routière"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Horaires & véhicule</p>
+                <h2 className="text-2xl font-bold text-gray-900 mt-2">Quand partez-vous ?</h2>
+              </div>
+              <span className="text-xs font-semibold text-gray-400">2/3</span>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">Date*</label>
+                <input
+                  type="date"
+                  value={formData.date}
+                  min={minDate}
+                  onChange={(e) => handleChange('date', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">Heure*</label>
+                <input
+                  type="time"
+                  value={formData.time}
+                  onChange={(e) => handleChange('time', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-2">Véhicule</label>
+              <input
+                type="text"
+                value={formData.carModel}
+                onChange={(e) => handleChange('carModel', e.target.value)}
+                placeholder="Ex: Peugeot 308, Toyota Corolla..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+          </section>
+
+          {!isAuthenticated && (
+            <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <Icons.User size={18} />
+                </div>
+                <div>
+                  <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Coordonnées</p>
+                  <h2 className="text-xl font-bold text-gray-900">Présentez-vous aux passagers</h2>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">Nom complet*</label>
+                  <input
+                    type="text"
+                    value={formData.driverName || ''}
+                    onChange={(e) => handleChange('driverName', e.target.value)}
+                    placeholder="Ex: Moussa Diop"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">Téléphone*</label>
+                  <input
+                    type="tel"
+                    value={formData.driverPhone || ''}
+                    onChange={(e) => handleChange('driverPhone', e.target.value)}
+                    placeholder="Ex: 77 123 45 67"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                    required
+                  />
+                </div>
+              </div>
+              <p className="text-sm text-gray-500">Ces informations ne sont visibles que par les passagers intéressés. Elles permettent de vous contacter rapidement.</p>
+            </section>
+          )}
+
+          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Confort & infos</p>
+                <h2 className="text-2xl font-bold text-gray-900 mt-2">Personnalisez votre offre</h2>
+              </div>
+              <span className="text-xs font-semibold text-gray-400">3/3</span>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-3">Options disponibles</label>
+              <div className="flex flex-wrap gap-2">
+                {featureOptions.map(opt => {
+                  const isSelected = formData.features.includes(opt);
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => {
+                        const newFeatures = isSelected
+                          ? formData.features.filter(f => f !== opt)
+                          : [...formData.features, opt];
+                        handleChange('features', newFeatures);
+                      }}
+                      className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${
+                        isSelected
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-inner'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-2">Message aux passagers</label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => handleChange('description', e.target.value)}
+                placeholder="Dites-en plus sur vos habitudes de conduite, vos préférences ou un point de rendez-vous précis."
+                className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none h-28 resize-none"
+              />
+            </div>
+          </section>
+        </div>
+
+        <div className="space-y-6 lg:sticky lg:top-8">
+          <section className="bg-gray-900 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
+            <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at top, rgba(16,185,129,0.4), transparent 60%)' }}></div>
+            <div className="relative space-y-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-white/70">Récapitulatif</p>
+                <h3 className="text-2xl font-semibold mt-2">Votre trajet</h3>
+              </div>
+              <div className="space-y-4 text-sm">
+                <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
+                  <p className="text-xs text-white/60 uppercase">Départ</p>
+                  <p className="text-lg font-semibold">{formData.origin || 'À renseigner'}</p>
+                </div>
+                <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
+                  <p className="text-xs text-white/60 uppercase">Arrivée</p>
+                  <p className="text-lg font-semibold">{formData.destination || 'À renseigner'}</p>
+                </div>
+                <div className="bg-white/10 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-white/60 uppercase">Date & heure</p>
+                    <p className="text-lg font-semibold">
+                      {previewDate
+                        ? previewDate.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+                        : 'À confirmer'}
+                    </p>
+                  </div>
+                  <Icons.Calendar size={28} className="text-white/60" />
+                </div>
+                {formData.carModel && (
+                  <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
+                    <p className="text-xs text-white/60 uppercase">Véhicule</p>
+                    <p className="text-lg font-semibold">{formData.carModel}</p>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs text-white/70">
+                {formData.features.map(feature => (
+                  <span key={feature} className="px-3 py-1 rounded-full border border-white/20 bg-white/5">
+                    {feature}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Tarification</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-2">Ajustez vos conditions</h3>
+            </div>
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Prix par passager</p>
+                  <p className="text-3xl font-extrabold text-emerald-600">{formData.price.toLocaleString('fr-FR')} XOF</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleChange('price', Math.max(500, formData.price - 500))}
+                    className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleChange('price', formData.price + 500)}
+                    className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Places disponibles</p>
+                  <p className="text-3xl font-extrabold text-gray-900">{formData.seats}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleChange('seats', Math.max(1, formData.seats - 1))}
+                    className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleChange('seats', Math.min(7, formData.seats + 1))}
+                    className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="pt-4 border-t border-gray-100 space-y-3">
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !isFormValid}
+                className="w-full py-4 rounded-2xl font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 shadow-lg hover:from-emerald-700 hover:to-emerald-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Publication...
+                  </>
+                ) : (
+                  <>
+                    <Icons.CheckCircle size={18} />
+                    Publier le trajet
+                  </>
+                )}
+              </button>
+              <button
+                onClick={onCancel}
+                className="w-full py-3 rounded-2xl font-semibold text-gray-500 hover:text-gray-900 border border-gray-200"
+              >
+                Annuler
+              </button>
+              <p className="text-xs text-gray-400 text-center">
+                En publiant, vous acceptez les conditions SUNU YOON et vous engagez à honorer votre trajet.
+              </p>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );
@@ -1181,6 +1292,29 @@ function AppContent() {
     error: null
   });
 
+  const highlightedDriverRide = useMemo<Ride>(() => ({
+    id: 'featured-cheikh-ndiaye',
+    driver: {
+      id: 'driver-featured',
+      name: 'Cheikh Ndiaye',
+      avatarUrl: 'https://ui-avatars.com/api/?name=Cheikh+Ndiaye&background=059669&color=fff',
+      rating: 4.9,
+      reviewCount: 128,
+      isVerified: true
+    },
+    origin: 'Dakar, Plateau',
+    destination: 'Thiès, Grand Standing',
+    departureTime: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+    price: 4500,
+    currency: 'XOF',
+    seatsAvailable: 2,
+    totalSeats: 4,
+    carModel: 'Toyota Corolla 2019',
+    description: 'Départ ponctuel avec climatisation et rafraîchissements. Pause à Keur Massar si besoin.',
+    features: ['Climatisation', 'Non-fumeur', 'Bagages acceptés'],
+    duration: '1h 15m'
+  }), []);
+
   // Géolocalisation automatique au chargement (silencieuse)
   useEffect(() => {
     const initLocation = async () => {
@@ -1292,7 +1426,8 @@ function AppContent() {
 
   const renderContent = () => {
     switch (currentView) {
-      case 'home':
+      case 'home': {
+        const highlightedDepartureDate = new Date(highlightedDriverRide.departureTime);
         return (
           <>
             <div className="bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white py-20 px-4 md:py-32 relative overflow-hidden">
@@ -1350,8 +1485,103 @@ function AppContent() {
                  </div>
                </div>
             </div>
+
+            <div className="relative z-20 px-4 -mt-12">
+              <div className="max-w-5xl mx-auto bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 md:p-8 flex flex-col lg:flex-row gap-6 items-center">
+                <div className="flex items-center gap-4 w-full lg:w-1/3">
+                  <div className="relative">
+                    <img
+                      src={highlightedDriverRide.driver.avatarUrl}
+                      alt={highlightedDriverRide.driver.name}
+                      className="w-20 h-20 rounded-2xl object-cover shadow-lg"
+                    />
+                    {highlightedDriverRide.driver.isVerified && (
+                      <span className="absolute -bottom-1 -right-1 bg-emerald-600 text-white rounded-full p-1 border-2 border-white">
+                        <Icons.CheckCircle size={14} />
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.3em] text-gray-400">Conducteur à l'honneur</p>
+                    <h3 className="text-xl font-bold text-gray-900">{highlightedDriverRide.driver.name}</h3>
+                    <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                      <Icons.Star size={16} className="text-yellow-400 fill-yellow-400" />
+                      <span className="font-semibold text-gray-900">{highlightedDriverRide.driver.rating}</span>
+                      <span className="text-gray-300">•</span>
+                      <span>{highlightedDriverRide.driver.reviewCount} avis</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">{highlightedDriverRide.carModel}</p>
+                  </div>
+                </div>
+
+                <div className="flex-1 grid sm:grid-cols-2 gap-6 w-full">
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Itinéraire</p>
+                      <p className="text-lg font-semibold text-gray-900">{highlightedDriverRide.origin}</p>
+                      <p className="text-sm text-emerald-600 flex items-center gap-2">
+                        <Icons.ChevronRight size={16} />
+                        {highlightedDriverRide.destination}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Départ</p>
+                      <p className="text-base font-semibold text-gray-900">
+                        {highlightedDepartureDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {highlightedDepartureDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        <span className="text-gray-300 mx-1">•</span>
+                        {highlightedDriverRide.duration}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Ce trajet inclut</p>
+                    <div className="flex flex-wrap gap-2">
+                      {highlightedDriverRide.features.map(feature => (
+                        <span key={feature} className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">
+                          {feature}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-sm text-gray-500 leading-relaxed">
+                      {highlightedDriverRide.description}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="w-full lg:w-48 space-y-3 text-center lg:text-right">
+                  <div>
+                    <p className="text-sm text-gray-500">Prix par place</p>
+                    <p className="text-3xl font-extrabold text-emerald-600">
+                      {highlightedDriverRide.price.toLocaleString('fr-FR')} {highlightedDriverRide.currency}
+                    </p>
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    {highlightedDriverRide.seatsAvailable} / {highlightedDriverRide.totalSeats} places restantes
+                  </p>
+                  <button
+                    onClick={() => handleRideClick(highlightedDriverRide)}
+                    className="w-full py-3 rounded-2xl font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-lg"
+                  >
+                    Rejoindre ce trajet
+                  </button>
+                </div>
+              </div>
+            </div>
             
             <div className="px-4 pb-20">
+               <div className="max-w-6xl mx-auto -mt-6 mb-6 flex flex-col md:flex-row md:items-center gap-4">
+                 <button
+                   onClick={() => setCurrentView('publish')}
+                   className="w-full md:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                 >
+                   <Icons.PlusCircle size={18} />
+                   Publier un trajet
+                 </button>
+                 <p className="text-sm text-gray-500 md:ml-4">Publiez gratuitement, aucune inscription nécessaire.</p>
+               </div>
                <SearchForm 
                  onSearch={handleSearch} 
                  isLoading={isLoading} 
@@ -1359,37 +1589,8 @@ function AppContent() {
                  userLocation={userLocation}
                />
                
-               {/* LIVE MAP SECTION */}
-               <div className="max-w-6xl mx-auto mt-20">
-                  <div className="flex items-center justify-between mb-8">
-                     <h2 className="text-2xl font-bold text-gray-900">Aperçu en temps réel</h2>
-                     <div className="flex items-center gap-2 text-sm text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
-                        <span className="relative flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                        </span>
-                        Live
-                     </div>
-                  </div>
-                  <div className="bg-white p-2 rounded-xl shadow-lg border border-gray-100">
-                     <Map location={userLocation.coords} height="400px" />
-                     <div className="p-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div className="text-sm text-gray-500">
-                           {userLocation.coords 
-                             ? `Position: ${userLocation.coords.lat.toFixed(4)}, ${userLocation.coords.lng.toFixed(4)}`
-                             : "Activez la localisation pour voir les conducteurs."}
-                        </div>
-                        {!userLocation.coords && (
-                          <button 
-                            onClick={handleGeolocate}
-                            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-emerald-50 text-gray-700 hover:text-emerald-600 rounded-lg transition-colors font-medium text-sm"
-                          >
-                            <Icons.Crosshair size={16} />
-                            Activer ma position
-                          </button>
-                        )}
-                     </div>
-                  </div>
+               <div className="max-w-6xl mx-auto">
+                 <LiveTrackingPanel userLocation={userLocation.coords} />
                </div>
 
                {/* Comment ça marche */}
@@ -1610,6 +1811,7 @@ function AppContent() {
             </div>
           </>
         );
+      }
 
       case 'search':
         return (
@@ -1724,8 +1926,8 @@ function AppContent() {
         ) : null;
       
       case 'publish':
-        // PLUS BESOIN D'INSCRIPTION POUR PUBLIER UN TRAJET
-        return <PublishForm onPublish={handlePublishRide} onCancel={() => setCurrentView('home')} isAuthenticated={isAuthenticated} onLoginRequest={() => setShowAuthModal(true)} />;
+        // Publication accessible même sans compte
+        return <PublishForm onPublish={handlePublishRide} onCancel={() => setCurrentView('home')} isAuthenticated={isAuthenticated} />;
       
       case 'profile':
         if (!isAuthenticated) {

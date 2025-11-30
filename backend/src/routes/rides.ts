@@ -19,8 +19,13 @@ router.get('/search',
         throw new AppError(errors.array()[0].msg, 400);
       }
 
-      const { origin, destination, date, seats } = req.query;
-      const minSeats = seats ? parseInt(seats as string) : 1;
+      const { origin, destination, date, seats } = req.query as {
+        origin: string;
+        destination: string;
+        date?: string;
+        seats?: string;
+      };
+      const minSeats = seats ? parseInt(seats, 10) : 1;
 
       // Construire la requête
       const whereClause: any = {

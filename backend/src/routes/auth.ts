@@ -17,17 +17,33 @@ const generateCode = (): string => {
 };
 
 // Générer les tokens JWT
+
 const generateTokens = (userId: string, phone: string) => {
+  const accessSecret = process.env.JWT_SECRET as jwt.Secret | undefined;
+  const refreshSecret = process.env.JWT_REFRESH_SECRET as jwt.Secret | undefined;
+
+  if (!accessSecret || !refreshSecret) {
+    throw new AppError('Configuration JWT manquante', 500);
+  }
+
+  const accessOptions: jwt.SignOptions = {
+    expiresIn: (process.env.JWT_EXPIRES_IN || '1h') as jwt.SignOptions['expiresIn']
+  };
+
+  const refreshOptions: jwt.SignOptions = {
+    expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn']
+  };
+
   const accessToken = jwt.sign(
     { userId, phone },
-    process.env.JWT_SECRET!,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
+    accessSecret,
+    accessOptions
   );
 
   const refreshToken = jwt.sign(
     { userId, phone, type: 'refresh' },
-    process.env.JWT_REFRESH_SECRET!,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+    refreshSecret,
+    refreshOptions
   );
 
   return { accessToken, refreshToken };

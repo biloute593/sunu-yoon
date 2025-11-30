@@ -18,6 +18,7 @@ import bookingRoutes from './routes/bookings';
 import paymentRoutes from './routes/payments';
 import messageRoutes from './routes/messages';
 import notificationRoutes from './routes/notifications';
+import trackingRoutes from './routes/tracking';
 
 // Services
 import { setupSocketHandlers } from './services/socket';
@@ -74,6 +75,7 @@ app.use('/api/bookings', authMiddleware, bookingRoutes);
 app.use('/api/payments', authMiddleware, paymentRoutes);
 app.use('/api/messages', authMiddleware, messageRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
+app.use('/api/tracking', trackingRoutes);
 
 // Webhooks (sans auth middleware)
 app.use('/webhooks/wave', express.raw({ type: 'application/json' }));

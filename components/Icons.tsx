@@ -24,7 +24,10 @@ import {
   Bell,
   Wallet,
   Smartphone,
-  AlertCircle
+  AlertCircle,
+  Pause,
+  Play,
+  StopCircle
 } from 'lucide-react';
 
 export const Icons = {
@@ -52,5 +55,8 @@ export const Icons = {
   Bell,
   Wallet,
   Smartphone,
-  AlertCircle
+  AlertCircle,
+  Pause,
+  Play,
+  StopCircle
 };
