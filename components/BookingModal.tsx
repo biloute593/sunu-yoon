@@ -52,52 +52,49 @@ const BookingModal: React.FC<BookingModalProps> = ({
   };
 
   const handlePayment = async () => {
-    if (!isAuthenticated) {
-      setError('Vous devez être connecté pour réserver');
-      return;
-    }
-
+    // Site 100% libre - pas besoin de connexion pour réserver
     setIsLoading(true);
     setError('');
     setStep('processing');
 
     try {
-      // 1. Créer la réservation
-      const booking = await bookingService.createBooking({
+      // Créer une réservation locale (site 100% libre)
+      const localBookingId = `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Stocker la réservation localement
+      const bookings = JSON.parse(localStorage.getItem('myBookings') || '[]');
+      bookings.push({
+        id: localBookingId,
         rideId,
-        seats: selectedSeats
+        seats: selectedSeats,
+        totalPrice,
+        currency,
+        origin,
+        destination,
+        departureTime,
+        driverName,
+        paymentMethod,
+        status: paymentMethod === 'CASH' ? 'pending_payment' : 'pending',
+        createdAt: new Date().toISOString()
       });
+      localStorage.setItem('myBookings', JSON.stringify(bookings));
 
-      setBookingId(booking.id);
+      setBookingId(localBookingId);
 
-      // 2. Si paiement en espèces, terminer ici
+      // Si paiement en espèces, terminer ici
       if (paymentMethod === 'CASH') {
         setStep('success');
-        onSuccess(booking.id);
+        onSuccess(localBookingId);
         return;
       }
 
-      // 3. Sinon, initier le paiement mobile
-      const payment = await paymentService.initiatePayment({
-        bookingId: booking.id,
-        method: paymentMethod,
-        amount: totalPrice,
-        currency
-      });
-
-      if (payment.checkoutUrl) {
-        setPaymentUrl(payment.checkoutUrl);
-        // Ouvrir le lien de paiement dans un nouvel onglet
-        window.open(payment.checkoutUrl, '_blank');
-        setStep('success');
-        onSuccess(booking.id);
-      } else {
-        throw new Error('URL de paiement non reçue');
-      }
+      // Pour les paiements mobiles, afficher les instructions
+      setStep('success');
+      onSuccess(localBookingId);
 
     } catch (err: any) {
       console.error('Erreur réservation:', err);
-      setError(err.response?.data?.error || 'Erreur lors de la réservation');
+      setError('Erreur lors de la réservation. Veuillez réessayer.');
       setStep('error');
     } finally {
       setIsLoading(false);

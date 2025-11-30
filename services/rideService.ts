@@ -59,8 +59,66 @@ class RideService {
     };
   }
 
+  // Récupérer les trajets publiés localement
+  private getLocalRides(): Ride[] {
+    try {
+      const localRides = JSON.parse(localStorage.getItem('publishedRides') || '[]');
+      return localRides.map((ride: any) => ({
+        id: ride.id,
+        driver: {
+          id: 'local-driver',
+          firstName: ride.driverName || 'Conducteur',
+          lastName: '',
+          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(ride.driverName || 'C')}&background=10b981&color=fff`,
+          rating: 4.5,
+          reviewCount: 0,
+          isVerified: false
+        },
+        origin: ride.origin,
+        destination: ride.destination,
+        departureTime: ride.departureTime,
+        price: ride.price,
+        currency: 'XOF',
+        seatsAvailable: ride.seats,
+        totalSeats: ride.seats,
+        carModel: ride.carModel || 'Véhicule',
+        description: ride.description,
+        features: ride.features || [],
+        estimatedDuration: '~3h',
+        status: 'active',
+        createdAt: ride.createdAt,
+        driverPhone: ride.driverPhone
+      }));
+    } catch {
+      return [];
+    }
+  }
+
   // Rechercher des trajets
   async searchRides(params: RideSearchParams): Promise<Ride[]> {
+    // Récupérer d'abord les trajets locaux
+    const localRides = this.getLocalRides();
+    
+    // Filtrer les trajets locaux selon les paramètres de recherche
+    const filteredLocalRides = localRides.filter(ride => {
+      if (params.origin && !ride.origin.toLowerCase().includes(params.origin.toLowerCase())) {
+        return false;
+      }
+      if (params.destination && !ride.destination.toLowerCase().includes(params.destination.toLowerCase())) {
+        return false;
+      }
+      if (params.date) {
+        const rideDate = new Date(ride.departureTime).toISOString().split('T')[0];
+        if (rideDate !== params.date) {
+          return false;
+        }
+      }
+      if (params.seats && ride.seatsAvailable < params.seats) {
+        return false;
+      }
+      return true;
+    });
+    
     try {
       const queryParams = new URLSearchParams();
       if (params.origin) queryParams.append('origin', params.origin);
@@ -75,15 +133,18 @@ class RideService {
 
       if (!response.ok) {
         console.error('Search rides failed:', response.status);
-        return [];
+        // Retourner les trajets locaux + mock rides
+        return [...filteredLocalRides, ...this.getMockRides(params)];
       }
 
       const data = await response.json();
-      return data.rides || data || [];
+      const apiRides = data.rides || data || [];
+      // Combiner les trajets locaux avec les trajets de l'API
+      return [...filteredLocalRides, ...apiRides];
     } catch (error) {
       console.error('Search rides error:', error);
-      // Retourner des données de démonstration si l'API n'est pas disponible
-      return this.getMockRides(params);
+      // Retourner les trajets locaux + données de démonstration si l'API n'est pas disponible
+      return [...filteredLocalRides, ...this.getMockRides(params)];
     }
   }
 
@@ -173,6 +234,20 @@ class RideService {
 
   // Données de démonstration si l'API n'est pas disponible
   private getMockRides(params: RideSearchParams): Ride[] {
+    // Utiliser la date de recherche ou aujourd'hui
+    const searchDate = params.date ? new Date(params.date) : new Date();
+    const baseTime = searchDate.getTime();
+    
+    // Ajuster les heures pour les trajets mock
+    const ride1Time = new Date(baseTime);
+    ride1Time.setHours(10, 0, 0, 0);
+    
+    const ride2Time = new Date(baseTime);
+    ride2Time.setHours(14, 30, 0, 0);
+    
+    const ride3Time = new Date(baseTime);
+    ride3Time.setHours(18, 0, 0, 0);
+    
     const mockRides: Ride[] = [
       {
         id: 'demo-1',
@@ -187,7 +262,7 @@ class RideService {
         },
         origin: params.origin || 'Dakar',
         destination: params.destination || 'Saint-Louis',
-        departureTime: new Date(Date.now() + 3600000 * 3).toISOString(),
+        departureTime: ride1Time.toISOString(),
         price: 3500,
         currency: 'XOF',
         seatsAvailable: 3,
@@ -212,7 +287,7 @@ class RideService {
         },
         origin: params.origin || 'Dakar',
         destination: params.destination || 'Thiès',
-        departureTime: new Date(Date.now() + 3600000 * 5).toISOString(),
+        departureTime: ride2Time.toISOString(),
         price: 2000,
         currency: 'XOF',
         seatsAvailable: 2,
@@ -237,7 +312,7 @@ class RideService {
         },
         origin: params.origin || 'Dakar',
         destination: params.destination || 'Touba',
-        departureTime: new Date(Date.now() + 3600000 * 8).toISOString(),
+        departureTime: ride3Time.toISOString(),
         price: 4000,
         currency: 'XOF',
         seatsAvailable: 4,
