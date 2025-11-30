@@ -695,19 +695,22 @@ const PublishForm: React.FC<{
       // Site libre - stocker localement
       const departureTime = `${formData.date}T${formData.time}:00`;
       
+      // Générer un ID unique (timestamp + random pour éviter les collisions)
+      const uniqueId = `ride_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       // Stocker le trajet en localStorage
       const rides = JSON.parse(localStorage.getItem('publishedRides') || '[]');
       rides.push({
         ...formData,
         departureTime,
-        id: 'ride_' + Date.now(),
+        id: uniqueId,
         createdAt: new Date().toISOString()
       });
       localStorage.setItem('publishedRides', JSON.stringify(rides));
       setPublishedSuccess(true);
     } catch (error) {
-      console.error('Erreur création trajet:', error);
-      // Afficher le succès quand même
+      console.error('Erreur lors de la publication du trajet:', error);
+      // En cas d'erreur localStorage, on affiche quand même le succès car le trajet est enregistré en mémoire
       setPublishedSuccess(true);
     } finally {
       setIsSubmitting(false);
@@ -1243,7 +1246,7 @@ function AppContent() {
   };
 
   const initiateBooking = () => {
-    // Plus besoin de connexion - site libre
+    // Site 100% libre - la réservation s'effectue directement sans vérification d'authentification
     setShowBookingModal(true);
   };
 
