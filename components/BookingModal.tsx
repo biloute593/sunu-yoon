@@ -59,25 +59,30 @@ const BookingModal: React.FC<BookingModalProps> = ({
 
     try {
       // Créer une réservation locale (site 100% libre)
-      const localBookingId = `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const localBookingId = `booking_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
       
-      // Stocker la réservation localement
-      const bookings = JSON.parse(localStorage.getItem('myBookings') || '[]');
-      bookings.push({
-        id: localBookingId,
-        rideId,
-        seats: selectedSeats,
-        totalPrice,
-        currency,
-        origin,
-        destination,
-        departureTime,
-        driverName,
-        paymentMethod,
-        status: paymentMethod === 'CASH' ? 'pending_payment' : 'pending',
-        createdAt: new Date().toISOString()
-      });
-      localStorage.setItem('myBookings', JSON.stringify(bookings));
+      // Stocker la réservation localement avec gestion d'erreur
+      try {
+        const bookings = JSON.parse(localStorage.getItem('myBookings') || '[]');
+        bookings.push({
+          id: localBookingId,
+          rideId,
+          seats: selectedSeats,
+          totalPrice,
+          currency,
+          origin,
+          destination,
+          departureTime,
+          driverName,
+          paymentMethod,
+          status: paymentMethod === 'CASH' ? 'pending_payment' : 'pending',
+          createdAt: new Date().toISOString()
+        });
+        localStorage.setItem('myBookings', JSON.stringify(bookings));
+      } catch (storageError) {
+        console.warn('Impossible de sauvegarder la réservation localement:', storageError);
+        // Continue - la réservation fonctionne quand même pour cette session
+      }
 
       setBookingId(localBookingId);
 

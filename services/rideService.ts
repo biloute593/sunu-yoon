@@ -89,7 +89,8 @@ class RideService {
         createdAt: ride.createdAt,
         driverPhone: ride.driverPhone
       }));
-    } catch {
+    } catch (error) {
+      console.warn('Erreur lors de la lecture des trajets locaux:', error);
       return [];
     }
   }
