@@ -1406,10 +1406,6 @@ function AppContent() {
   };
 
   const initiateBooking = () => {
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-      return;
-    }
     setShowBookingModal(true);
   };
 

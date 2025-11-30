@@ -1,4 +1,5 @@
 import { ApiClient } from './apiClient';
+import { PaymentMethod } from './paymentService';
 
 export interface Booking {
   id: string;
@@ -31,18 +32,53 @@ export interface Booking {
   };
 }
 
-export interface CreateBookingData {
+export interface GuestBooking {
+  id: string;
+  status: 'pending' | 'notified' | 'cancelled';
+  seats: number;
+  passenger: {
+    name: string;
+    phone: string;
+    contactPreference?: 'call' | 'whatsapp' | 'sms';
+  };
+  paymentMethod: PaymentMethod;
+  notes?: string;
+  ride: {
+    id: string;
+    origin: string;
+    destination: string;
+    departureTime: string;
+    driver: {
+      name: string;
+      phone?: string | null;
+      email?: string | null;
+    };
+  };
+  remainingSeats: number;
+}
+
+export interface CreateGuestBookingData {
   rideId: string;
   seats?: number;
+  passengerName: string;
+  passengerPhone: string;
+  paymentMethod?: PaymentMethod;
+  contactPreference?: 'call' | 'whatsapp' | 'sms';
+  notes?: string;
 }
 
 // Service de gestion des réservations
 export const bookingService = {
-  // Créer une réservation
-  async createBooking(data: CreateBookingData): Promise<Booking> {
-    const response = await ApiClient.post<{ booking: Booking }>('/bookings', {
+  // Créer une réservation invité sans compte
+  async createBooking(data: CreateGuestBookingData): Promise<GuestBooking> {
+    const response = await ApiClient.post<{ booking: GuestBooking }>('/guest-bookings', {
       rideId: data.rideId,
-      seats: data.seats || 1
+      seats: data.seats || 1,
+      passengerName: data.passengerName,
+      passengerPhone: data.passengerPhone,
+      paymentMethod: data.paymentMethod,
+      contactPreference: data.contactPreference,
+      notes: data.notes
     });
 
     if (response.success && response.data?.booking) {

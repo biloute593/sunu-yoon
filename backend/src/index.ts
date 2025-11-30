@@ -15,6 +15,7 @@ import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import rideRoutes from './routes/rides';
 import bookingRoutes from './routes/bookings';
+import guestBookingRoutes from './routes/guestBookings';
 import paymentRoutes from './routes/payments';
 import messageRoutes from './routes/messages';
 import notificationRoutes from './routes/notifications';
@@ -72,6 +73,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/rides', rideRoutes); // Certaines routes sont publiques
 app.use('/api/bookings', authMiddleware, bookingRoutes);
+app.use('/api/guest-bookings', guestBookingRoutes);
 app.use('/api/payments', authMiddleware, paymentRoutes);
 app.use('/api/messages', authMiddleware, messageRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);

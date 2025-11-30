@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { paymentService, PaymentMethod } from '../services/paymentService';
+import { PaymentMethod } from '../services/paymentService';
 import { bookingService } from '../services/bookingService';
 import { Icons } from './Icons';
 
@@ -33,71 +32,57 @@ const BookingModal: React.FC<BookingModalProps> = ({
   driverName,
   onSuccess
 }) => {
-  const { user, isAuthenticated } = useAuth();
-  
   const [step, setStep] = useState<BookingStep>('seats');
   const [selectedSeats, setSelectedSeats] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('WAVE');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [bookingId, setBookingId] = useState<string>('');
-  const [paymentUrl, setPaymentUrl] = useState<string>('');
+  const [passengerName, setPassengerName] = useState('');
+  const [passengerPhone, setPassengerPhone] = useState('');
+  const [contactPreference, setContactPreference] = useState<'call' | 'whatsapp' | 'sms'>('call');
+  const [notes, setNotes] = useState('');
+  const [driverContact, setDriverContact] = useState<{ name: string; phone?: string | null; email?: string | null } | null>(null);
+  const [formError, setFormError] = useState('');
 
   if (!isOpen) return null;
 
   const totalPrice = price * selectedSeats;
 
   const handleSelectSeats = () => {
+    if (!passengerName.trim() || !passengerPhone.trim()) {
+      setFormError('Merci de renseigner votre nom complet et votre numéro.');
+      return;
+    }
+    setFormError('');
     setStep('payment');
   };
 
   const handlePayment = async () => {
-    if (!isAuthenticated) {
-      setError('Vous devez être connecté pour réserver');
-      return;
-    }
-
     setIsLoading(true);
     setError('');
     setStep('processing');
 
     try {
-      // 1. Créer la réservation
       const booking = await bookingService.createBooking({
         rideId,
-        seats: selectedSeats
+        seats: selectedSeats,
+        passengerName,
+        passengerPhone,
+        paymentMethod,
+        contactPreference,
+        notes
       });
 
       setBookingId(booking.id);
-
-      // 2. Si paiement en espèces, terminer ici
-      if (paymentMethod === 'CASH') {
-        setStep('success');
-        onSuccess(booking.id);
-        return;
-      }
-
-      // 3. Sinon, initier le paiement mobile
-      const payment = await paymentService.initiatePayment({
-        bookingId: booking.id,
-        method: paymentMethod,
-        amount: totalPrice,
-        currency
-      });
-
-      if (payment.checkoutUrl) {
-        setPaymentUrl(payment.checkoutUrl);
-        // Ouvrir le lien de paiement dans un nouvel onglet
-        window.open(payment.checkoutUrl, '_blank');
-        setStep('success');
-        onSuccess(booking.id);
-      } else {
-        throw new Error('URL de paiement non reçue');
-      }
+      setDriverContact(booking.ride.driver);
+      setStep('success');
+      onSuccess(booking.id);
 
     } catch (err: any) {
       console.error('Erreur réservation:', err);
-      setError(err.response?.data?.error || 'Erreur lors de la réservation');
+      const apiMessage = err?.response?.data?.error;
+      setError(apiMessage || err?.message || 'Erreur lors de la réservation');
       setStep('error');
     } finally {
       setIsLoading(false);
@@ -110,7 +95,12 @@ const BookingModal: React.FC<BookingModalProps> = ({
     setPaymentMethod('WAVE');
     setError('');
     setBookingId('');
-    setPaymentUrl('');
+    setPassengerName('');
+    setPassengerPhone('');
+    setContactPreference('call');
+    setNotes('');
+    setDriverContact(null);
+    setFormError('');
     onClose();
   };
 
@@ -160,15 +150,76 @@ const BookingModal: React.FC<BookingModalProps> = ({
           </button>
         </div>
         <p className="text-center text-sm text-gray-500 mt-2">{seats} place(s) disponible(s)</p>
-      </div>
+        </div>
 
-      {/* Prix total */}
-      <div className="bg-emerald-50 rounded-xl p-4 flex justify-between items-center">
-        <span className="text-gray-700 font-medium">Total à payer</span>
-        <span className="text-2xl font-bold text-emerald-600">
-          {totalPrice.toLocaleString('fr-FR')} {currency}
-        </span>
-      </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-2">Votre nom complet*</label>
+            <input
+              type="text"
+              value={passengerName}
+              onChange={(e) => setPassengerName(e.target.value)}
+              placeholder="Ex: Aissatou Ndiaye"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-2">Téléphone / WhatsApp*</label>
+            <input
+              type="tel"
+              value={passengerPhone}
+              onChange={(e) => setPassengerPhone(e.target.value)}
+              placeholder="Ex: 77 123 45 67"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-2">Préférence de contact</label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'call', label: 'Appel' },
+                { key: 'whatsapp', label: 'WhatsApp' },
+                { key: 'sms', label: 'SMS' }
+              ].map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setContactPreference(option.key as 'call' | 'whatsapp' | 'sms')}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+                    contactPreference === option.key
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-2">Message pour le conducteur (optionnel)</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Point de rendez-vous, bagages, etc."
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none h-24"
+            />
+          </div>
+        </div>
+
+        {formError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">
+            {formError}
+          </div>
+        )}
+
+        {/* Prix total */}
+        <div className="bg-emerald-50 rounded-xl p-4 flex justify-between items-center">
+          <span className="text-gray-700 font-medium">Total à payer</span>
+          <span className="text-2xl font-bold text-emerald-600">
+            {totalPrice.toLocaleString('fr-FR')} {currency}
+          </span>
+        </div>
 
       <button
         onClick={handleSelectSeats}
@@ -262,9 +313,13 @@ const BookingModal: React.FC<BookingModalProps> = ({
       <button
         onClick={handlePayment}
         disabled={isLoading}
-        className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+        className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70"
       >
-        {paymentMethod === 'CASH' ? 'Confirmer la réservation' : `Payer ${totalPrice.toLocaleString('fr-FR')} ${currency}`}
+        {isLoading ? (
+          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        ) : (
+          'Envoyer ma demande au conducteur'
+        )}
       </button>
 
       <p className="text-center text-xs text-gray-400 flex items-center justify-center gap-1">
@@ -280,8 +335,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
         <div className="absolute inset-0 rounded-full border-4 border-emerald-200"></div>
         <div className="absolute inset-0 rounded-full border-4 border-emerald-600 border-t-transparent animate-spin"></div>
       </div>
-      <h3 className="text-xl font-bold text-gray-900 mb-2">Traitement en cours...</h3>
-      <p className="text-gray-600">Veuillez patienter pendant que nous traitons votre réservation.</p>
+      <h3 className="text-xl font-bold text-gray-900 mb-2">Nous contactons le conducteur...</h3>
+      <p className="text-gray-600">Votre demande est en cours d'envoi. Cela ne prend que quelques secondes.</p>
     </div>
   );
 
@@ -290,39 +345,50 @@ const BookingModal: React.FC<BookingModalProps> = ({
       <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
         <Icons.CheckCircle className="text-emerald-600" size={48} />
       </div>
-      <h3 className="text-xl font-bold text-gray-900 mb-2">Réservation confirmée !</h3>
+      <h3 className="text-xl font-bold text-gray-900 mb-2">Demande envoyée !</h3>
       <p className="text-gray-600 mb-6">
-        {paymentMethod === 'CASH' 
-          ? 'N\'oubliez pas de préparer le montant exact pour le conducteur.'
-          : 'Votre paiement a été initié. Finalisez-le dans l\'application de paiement.'
-        }
+        Le conducteur {driverContact?.name || driverName} reçoit vos coordonnées et vous contactera rapidement pour finaliser le trajet.
       </p>
-      
-      <div className="bg-gray-50 rounded-xl p-4 text-left mb-6">
-        <div className="flex justify-between text-sm mb-2">
-          <span className="text-gray-500">N° de réservation</span>
+
+      <div className="bg-white border border-gray-100 rounded-xl p-4 text-left mb-6">
+        <div className="flex justify-between text-sm mb-3">
+          <span className="text-gray-500">Référence</span>
           <span className="font-mono font-bold text-gray-900">{bookingId.slice(0, 8).toUpperCase()}</span>
         </div>
         <div className="flex justify-between text-sm mb-2">
-          <span className="text-gray-500">Places réservées</span>
+          <span className="text-gray-500">Places demandées</span>
           <span className="font-bold text-gray-900">{selectedSeats}</span>
         </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">Montant</span>
+        <div className="flex justify-between text-sm mb-2">
+          <span className="text-gray-500">Montant estimé</span>
           <span className="font-bold text-emerald-600">{totalPrice.toLocaleString('fr-FR')} {currency}</span>
+        </div>
+        <div className="flex justify-between text-sm mb-2">
+          <span className="text-gray-500">Mode de paiement prévu</span>
+          <span className="font-semibold text-gray-800">{paymentMethod === 'CASH' ? 'Espèces' : paymentMethod === 'WAVE' ? 'Wave' : 'Orange Money'}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-500">Contact préféré</span>
+          <span className="font-semibold text-gray-800">
+            {contactPreference === 'call' ? 'Appel' : contactPreference === 'whatsapp' ? 'WhatsApp' : 'SMS'}
+          </span>
         </div>
       </div>
 
-      {paymentUrl && paymentMethod !== 'CASH' && (
-        <a
-          href={paymentUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 text-emerald-600 hover:underline mb-6"
-        >
-          Ouvrir le paiement <Icons.ChevronRight size={16} />
-        </a>
-      )}
+      <div className="bg-gray-50 rounded-xl p-4 text-left mb-6">
+        <p className="text-sm text-gray-500 mb-2">Coordonnées du conducteur</p>
+        <p className="text-base font-semibold text-gray-900">{driverContact?.name || driverName}</p>
+        {driverContact?.phone ? (
+          <a
+            href={`tel:${driverContact.phone}`}
+            className="inline-flex items-center gap-2 text-emerald-600 mt-1"
+          >
+            <Icons.Smartphone size={16} /> {driverContact.phone}
+          </a>
+        ) : (
+          <p className="text-sm text-gray-500">Le conducteur vous contactera directement.</p>
+        )}
+      </div>
 
       <button
         onClick={resetAndClose}
