@@ -1451,6 +1451,69 @@ function AppContent() {
                  </div>
                </div>
 
+               {/* Témoignages */}
+               <div className="max-w-6xl mx-auto mt-20">
+                 <div className="text-center mb-12">
+                   <h2 className="text-2xl font-bold text-gray-900 mb-4">Ce que disent nos voyageurs 💬</h2>
+                   <p className="text-gray-600">Des milliers de Sénégalais nous font confiance</p>
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {[
+                      {
+                        name: 'Fatou Diallo',
+                        city: 'Dakar',
+                        text: "J'utilise Sunu Yoon chaque semaine pour aller à Thiès voir ma famille. C'est moins cher et plus confortable que le bus !",
+                        rating: 5,
+                        trips: 24,
+                        avatar: 'FD'
+                      },
+                      {
+                        name: 'Mamadou Ndiaye',
+                        city: 'Saint-Louis',
+                        text: "En tant que conducteur, Sunu Yoon me permet de rentabiliser mes trajets. L'application est simple et les passagers sont respectueux.",
+                        rating: 5,
+                        trips: 156,
+                        avatar: 'MN',
+                        isDriver: true
+                      },
+                      {
+                        name: 'Aissatou Ba',
+                        city: 'Touba',
+                        text: "Super application ! J'ai fait Dakar-Touba pour le Magal à un prix imbattable. Le conducteur était ponctuel et agréable.",
+                        rating: 5,
+                        trips: 8,
+                        avatar: 'AB'
+                      }
+                    ].map((testimonial, idx) => (
+                      <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative">
+                        <div className="absolute -top-3 -left-3 text-4xl opacity-20">❝</div>
+                        <p className="text-gray-700 mb-6 relative z-10 italic leading-relaxed">
+                          "{testimonial.text}"
+                        </p>
+                        <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
+                          <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center text-white font-bold shadow-sm">
+                            {testimonial.avatar}
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-bold text-gray-900 flex items-center gap-2">
+                              {testimonial.name}
+                              {testimonial.isDriver && (
+                                <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Conducteur</span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-500">{testimonial.city} • {testimonial.trips} trajets</div>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            {[...Array(testimonial.rating)].map((_, i) => (
+                              <Icons.Star key={i} size={14} className="text-yellow-400 fill-yellow-400" />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                 </div>
+               </div>
+
                {/* Trajets populaires */}
                <div className="max-w-6xl mx-auto mt-20">
                  <h2 className="text-2xl font-bold text-gray-900 mb-8">🔥 Trajets populaires</h2>
@@ -1480,6 +1543,62 @@ function AppContent() {
                         </div>
                       </button>
                     ))}
+                 </div>
+               </div>
+
+               {/* CTA Final */}
+               <div className="max-w-6xl mx-auto mt-20">
+                 <div className="bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 rounded-3xl p-8 md:p-12 text-center relative overflow-hidden">
+                   <div className="absolute inset-0 opacity-10">
+                     <div className="absolute top-0 left-0 w-40 h-40 bg-white rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                     <div className="absolute bottom-0 right-0 w-60 h-60 bg-white rounded-full translate-x-1/3 translate-y-1/3"></div>
+                   </div>
+                   <div className="relative z-10">
+                     <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+                       Prêt à voyager ? 🚗
+                     </h2>
+                     <p className="text-emerald-100 mb-8 max-w-xl mx-auto">
+                       Rejoignez des milliers de Sénégalais qui voyagent malin. Publiez votre trajet ou trouvez un conducteur en quelques clics.
+                     </p>
+                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                       <button 
+                         onClick={() => setCurrentView('publish')}
+                         className="px-8 py-4 bg-white text-emerald-600 font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
+                       >
+                         <Icons.PlusCircle size={20} />
+                         Proposer un trajet
+                       </button>
+                       <button 
+                         onClick={() => setCurrentView('search')}
+                         className="px-8 py-4 bg-emerald-700/50 backdrop-blur-sm text-white font-bold rounded-xl border-2 border-white/20 hover:bg-emerald-700/70 transition-all flex items-center justify-center gap-2"
+                       >
+                         <Icons.Search size={20} />
+                         Rechercher un trajet
+                       </button>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+
+               {/* Stats rapides */}
+               <div className="max-w-6xl mx-auto mt-20 mb-8">
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+                   <div>
+                     <div className="text-3xl font-bold text-gray-900">🇸🇳</div>
+                     <div className="text-sm text-gray-500 mt-1">100% Sénégalais</div>
+                   </div>
+                   <div>
+                     <div className="text-3xl font-bold text-emerald-600">50K+</div>
+                     <div className="text-sm text-gray-500 mt-1">Trajets réalisés</div>
+                   </div>
+                   <div>
+                     <div className="text-3xl font-bold text-emerald-600">15K+</div>
+                     <div className="text-sm text-gray-500 mt-1">Membres actifs</div>
+                   </div>
+                   <div>
+                     <div className="text-3xl font-bold text-yellow-500">⭐ 4.8</div>
+                     <div className="text-sm text-gray-500 mt-1">Note moyenne</div>
+                   </div>
                  </div>
                </div>
             </div>
