@@ -325,10 +325,10 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
   return (
     <div 
       onClick={onClick}
-      className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-lg hover:border-emerald-200 transition-all cursor-pointer group flex flex-col h-full"
+      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-xl hover:border-emerald-300 transition-all cursor-pointer group flex flex-col min-h-[280px]"
     >
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex flex-col relative pl-5 border-l-2 border-emerald-200 space-y-4">
+      <div className="flex justify-between items-start mb-5">
+        <div className="flex flex-col relative pl-6 border-l-2 border-emerald-200 space-y-5">
           <div className="relative">
             <div className="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-emerald-100"></div>
             <div className="flex flex-col">
@@ -366,13 +366,13 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-4 border-t border-gray-50 mt-auto">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between pt-5 border-t border-gray-100 mt-auto">
+        <div className="flex items-center gap-4">
           <div className="relative">
             <img 
               src={ride.driver.avatarUrl} 
               alt={ride.driver.name} 
-              className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-sm"
+              className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm"
             />
             {ride.driver.isVerified && (
               <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm">
@@ -1874,33 +1874,33 @@ function AppContent() {
               )}
               
               {isLoading ? (
-                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                 <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
                    {[1,2,3,4,5,6].map(i => (
-                     <div key={i} className="h-44 bg-white rounded-xl border border-gray-100 p-4 animate-pulse flex flex-col">
+                     <div key={i} className="min-h-[280px] bg-white rounded-2xl border border-gray-100 p-6 animate-pulse flex flex-col shadow-sm">
                        <div className="flex justify-between mb-4">
-                         <div className="space-y-2 flex-1">
-                           <div className="h-4 bg-gray-200 rounded w-1/3"></div>
-                           <div className="h-3 bg-gray-100 rounded w-1/2"></div>
+                         <div className="space-y-3 flex-1">
+                           <div className="h-5 bg-gray-200 rounded w-2/5"></div>
+                           <div className="h-4 bg-gray-100 rounded w-3/5"></div>
                          </div>
-                         <div className="h-6 bg-gray-200 rounded w-20"></div>
+                         <div className="h-8 bg-gray-200 rounded-lg w-24"></div>
                        </div>
-                       <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-50">
-                         <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                       <div className="flex items-center gap-4 mt-auto pt-5 border-t border-gray-100">
+                         <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
                          <div className="space-y-2 flex-1">
-                           <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                           <div className="h-2 bg-gray-100 rounded w-1/3"></div>
+                           <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                           <div className="h-3 bg-gray-100 rounded w-1/2"></div>
                          </div>
                        </div>
                      </div>
                    ))}
                  </div>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
                   {searchResults.map(ride => (
                     <RideCard key={ride.id} ride={ride} onClick={() => handleRideClick(ride)} />
                   ))}
                   {searchResults.length === 0 && (
-                    <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-gray-200 md:col-span-2 xl:col-span-3">
+                    <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200 col-span-full">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Icons.Search className="text-gray-400" size={28} />
                       </div>
