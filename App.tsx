@@ -1073,13 +1073,24 @@ const PublishForm: React.FC<{
                   <input
                     type="number"
                     min={500}
-                    step={100}
+                    step={50}
                     value={formData.price}
                     onChange={(e) => {
-                      const value = Math.max(500, Number(e.target.value) || 0);
-                      handleChange('price', value);
+                      const value = e.target.value;
+                      if (value === '') {
+                        handleChange('price', '');
+                      } else {
+                        handleChange('price', Number(value));
+                      }
                     }}
-                    className="w-full px-4 py-3 text-lg font-bold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    onBlur={(e) => {
+                      const value = Number(e.target.value);
+                      if (!value || value < 500) {
+                        handleChange('price', 500);
+                      }
+                    }}
+                    placeholder="Ex: 2500"
+                    className="w-full px-4 py-3 text-2xl font-bold text-emerald-600 bg-white focus:outline-none"
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Les voyageurs apprécient les tarifs clairs. Ajustez librement à partir de 500 F.</p>
