@@ -1,16 +1,18 @@
-﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import CookieBanner from './components/CookieBanner';
-import AuthModal from './components/AuthModal';
-import BookingModal from './components/BookingModal';
-import ChatWindow from './components/ChatWindow';
-import FAQSection from './components/FAQ';
 import { Icons } from './components/Icons';
-import LiveTrackingPanel from './components/LiveTrackingPanel';
 import { rideService, Ride as ApiRide, RideSearchParams } from './services/rideService';
 import { locationService } from './services/locationService';
 import { Coordinates, LocationState, DraftRide } from './types';
+
+// Lazy load des composants lourds pour optimiser le chargement initial
+const AuthModal = lazy(() => import('./components/AuthModal'));
+const BookingModal = lazy(() => import('./components/BookingModal'));
+const ChatWindow = lazy(() => import('./components/ChatWindow'));
+const FAQSection = lazy(() => import('./components/FAQ'));
+const LiveTrackingPanel = lazy(() => import('./components/LiveTrackingPanel'));
 
 // Types adaptés pour le frontend
 interface User {
@@ -234,13 +236,14 @@ const SearchForm: React.FC<{
             <button
               type="button"
               onClick={onLocate}
-              title="Utiliser ma position actuelle"
-              className={`p-1.5 rounded-full transition-colors ${
+              title={userLocation.loading ? 'Localisation en cours...' : userLocation.coords ? 'Position détectée' : 'Utiliser ma position actuelle'}
+              disabled={userLocation.loading}
+              className={`p-1.5 rounded-full transition-all duration-300 transform hover:scale-110 ${
                 userLocation.loading 
-                  ? 'animate-spin text-emerald-600' 
+                  ? 'animate-spin text-emerald-600 cursor-wait' 
                   : userLocation.coords 
-                    ? 'text-emerald-600 bg-emerald-50' 
-                    : 'text-gray-400 hover:text-emerald-600 hover:bg-gray-100'
+                    ? 'text-emerald-600 bg-emerald-50 shadow-sm animate-pulse' 
+                    : 'text-gray-400 hover:text-emerald-600 hover:bg-gray-100 hover:shadow-sm'
               }`}
             >
               {userLocation.loading ? (
@@ -308,9 +311,13 @@ const SearchForm: React.FC<{
       
       {/* Message d'erreur de localisation */}
       {userLocation.error && (
-        <div className="mt-3 flex items-center gap-2 text-amber-600 text-sm">
-          <Icons.AlertCircle size={16} />
-          <span>{userLocation.error}</span>
+        <div className="mt-3 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm animate-slide-in-right">
+          <Icons.AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium mb-1">Localisation impossible</p>
+            <p className="text-amber-700">{userLocation.error}</p>
+            <p className="text-xs text-amber-600 mt-1">💡 Astuce: Saisissez manuellement votre ville de départ</p>
+          </div>
         </div>
       )}
     </div>
@@ -325,7 +332,7 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
   return (
     <div 
       onClick={onClick}
-      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-7 hover:shadow-xl hover:border-emerald-300 transition-all cursor-pointer group flex flex-col min-h-[320px]"
+      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-7 hover:shadow-xl hover:border-emerald-300 transition-all duration-300 cursor-pointer group flex flex-col min-h-[320px] transform hover:-translate-y-1 hover:scale-[1.02]"
     >
       <div className="flex justify-between items-start mb-6">
         <div className="flex flex-col relative pl-6 border-l-2 border-emerald-200 space-y-6">
@@ -1608,7 +1615,13 @@ function AppContent() {
                />
                
                <div className="max-w-6xl mx-auto">
-                 <LiveTrackingPanel userLocation={userLocation.coords} />
+                 <Suspense fallback={
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 animate-pulse">
+                     <div className="h-64 bg-gray-100 rounded-lg"></div>
+                   </div>
+                 }>
+                   <LiveTrackingPanel userLocation={userLocation.coords} />
+                 </Suspense>
                </div>
 
                {/* Comment ça marche */}
@@ -1802,7 +1815,18 @@ function AppContent() {
 
                {/* FAQ Section */}
                <div className="max-w-6xl mx-auto mt-20 px-4">
-                 <FAQSection />
+                 <Suspense fallback={
+                   <div className="space-y-4">
+                     {[1, 2, 3].map(i => (
+                       <div key={i} className="bg-white rounded-xl p-6 animate-pulse">
+                         <div className="h-6 bg-gray-200 rounded w-3/4 mb-3"></div>
+                         <div className="h-4 bg-gray-100 rounded w-full"></div>
+                       </div>
+                     ))}
+                   </div>
+                 }>
+                   <FAQSection />
+                 </Suspense>
                </div>
 
                {/* Stats rapides */}
@@ -1989,39 +2013,45 @@ function AppContent() {
       {renderContent()}
       <CookieBanner />
       
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)}
-        onSuccess={() => {
-          // Rediriger vers le profil après connexion/inscription réussie
-          setCurrentView('profile');
-        }}
-      />
+      <Suspense fallback={<div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div></div>}>
+        <AuthModal 
+          isOpen={showAuthModal} 
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={() => {
+            // Rediriger vers le profil après connexion/inscription réussie
+            setCurrentView('profile');
+          }}
+        />
+      </Suspense>
       
       {selectedRide && (
         <>
-          <BookingModal 
-            isOpen={showBookingModal}
-            onClose={() => setShowBookingModal(false)}
-            rideId={selectedRide.id}
-            price={selectedRide.price}
-            currency={selectedRide.currency}
-            seats={selectedRide.seatsAvailable}
-            origin={selectedRide.origin}
-            destination={selectedRide.destination}
-            departureTime={selectedRide.departureTime}
-            driverName={selectedRide.driver.name}
-            onSuccess={handleBookingSuccess}
-          />
+          <Suspense fallback={<div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div></div>}>
+            <BookingModal 
+              isOpen={showBookingModal}
+              onClose={() => setShowBookingModal(false)}
+              rideId={selectedRide.id}
+              price={selectedRide.price}
+              currency={selectedRide.currency}
+              seats={selectedRide.seatsAvailable}
+              origin={selectedRide.origin}
+              destination={selectedRide.destination}
+              departureTime={selectedRide.departureTime}
+              driverName={selectedRide.driver.name}
+              onSuccess={handleBookingSuccess}
+            />
+          </Suspense>
           
-          <ChatWindow
-            isOpen={showChatWindow}
-            onClose={() => setShowChatWindow(false)}
-            recipientId={selectedRide.driver.id}
-            recipientName={selectedRide.driver.name}
-            recipientAvatar={selectedRide.driver.avatarUrl}
-            rideId={selectedRide.id}
-          />
+          <Suspense fallback={<div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div></div>}>
+            <ChatWindow
+              isOpen={showChatWindow}
+              onClose={() => setShowChatWindow(false)}
+              recipientId={selectedRide.driver.id}
+              recipientName={selectedRide.driver.name}
+              recipientAvatar={selectedRide.driver.avatarUrl}
+              rideId={selectedRide.id}
+            />
+          </Suspense>
         </>
       )}
     </Layout>

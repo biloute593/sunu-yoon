@@ -9,6 +9,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 80px; /* Pour éviter que le header cache le contenu au scroll */
 }
 
 body {
@@ -18,6 +19,8 @@ body {
   background-color: #f9fafb;
   color: #111827;
   line-height: 1.5;
+  /* Performance: Utiliser transform au lieu de top/left pour les animations */
+  will-change: auto;
 }
 
 /* Scrollbar Styling */
@@ -72,6 +75,28 @@ body {
   }
 }
 
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 @keyframes pulse-ring {
   0% {
     transform: scale(0.8);
@@ -101,6 +126,15 @@ body {
   }
 }
 
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(16, 185, 129, 0.5);
+  }
+}
+
 .animate-slide-up {
   animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -113,6 +147,14 @@ body {
   animation: fade-in-down 0.3s ease-out forwards;
 }
 
+.animate-slide-in-right {
+  animation: slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 .animate-pulse-ring {
   animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
 }
@@ -121,11 +163,61 @@ body {
   animation: bounce-subtle 2s ease-in-out infinite;
 }
 
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
 /* Skeleton Loading */
 .skeleton {
   background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* Loader spinner amélioré */
+.spinner {
+  border: 3px solid rgba(16, 185, 129, 0.1);
+  border-radius: 50%;
+  border-top-color: #10b981;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Dots loader */
+.dots-loader {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.dots-loader span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: bounce-dots 1.4s infinite ease-in-out both;
+}
+
+.dots-loader span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.dots-loader span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounce-dots {
+  0%, 80%, 100% { 
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% { 
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* Map Styles */
@@ -186,6 +278,7 @@ body {
 input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
   opacity: 0.6;
+  transition: opacity 0.2s;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator:hover {
@@ -196,16 +289,55 @@ input:focus,
 textarea:focus,
 select:focus {
   outline: none;
+  /* L'outline sera géré par les classes Tailwind pour un meilleur contrôle */
+}
+
+input,
+textarea,
+select {
+  transition: all 0.2s ease;
+}
+
+/* Animation pour les inputs avec erreur */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+.input-error {
+  animation: shake 0.5s;
+  border-color: #ef4444 !important;
 }
 
 /* Buttons */
 button {
   cursor: pointer;
   font-family: inherit;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 button:disabled {
   cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+button:not(:disabled):active {
+  transform: translateY(0);
+}
+
+/* Hover effects pour les cartes */
+.card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 }
 
 /* Links */
@@ -349,6 +481,26 @@ a:hover {
   select,
   textarea {
     font-size: 16px; /* Prevent zoom on iOS */
+  }
+  
+  /* Touch feedback amélioré */
+  button:active,
+  .touchable:active {
+    opacity: 0.7;
+    transform: scale(0.98);
+  }
+  
+  /* Meilleure taille des zones tactiles */
+  button,
+  a,
+  .clickable {
+    min-height: 44px; /* Apple HIG recommandation */
+    min-width: 44px;
+  }
+  
+  /* Réduire les animations pour économiser la batterie */
+  * {
+    animation-duration: 0.3s !important;
   }
 }
 
