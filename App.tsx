@@ -1590,7 +1590,7 @@ function AppContent() {
             </div>
             
             <div className="px-4 pb-20">
-               <div className="max-w-6xl mx-auto -mt-6 mb-6 flex flex-col md:flex-row md:items-center gap-4">
+               <div className="max-w-6xl mx-auto mt-8 mb-6 flex flex-col md:flex-row md:items-center gap-4">
                  <button
                    onClick={() => setCurrentView('publish')}
                    className="w-full md:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
