@@ -389,7 +389,7 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <span className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full font-medium">
             {ride.seatsAvailable} place{ride.seatsAvailable > 1 ? 's' : ''}
           </span>
@@ -931,15 +931,21 @@ const PublishForm: React.FC<{
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">Téléphone*</label>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    Téléphone / WhatsApp*
+                    <span className="ml-2 text-xs text-emerald-600">📱 Lien WhatsApp auto</span>
+                  </label>
                   <input
                     type="tel"
                     value={formData.driverPhone || ''}
                     onChange={(e) => handleChange('driverPhone', e.target.value)}
-                    placeholder="Ex: 77 123 45 67"
+                    placeholder="Ex: 221771234567 (avec indicatif +221)"
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
                     required
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    👉 Format: 221XXXXXXXXX (ex: 221771234567). Les passagers pourront vous contacter directement sur WhatsApp!
+                  </p>
                 </div>
               </div>
               <p className="text-sm text-gray-500">Ces informations ne sont visibles que par les passagers intéressés. Elles permettent de vous contacter rapidement.</p>
