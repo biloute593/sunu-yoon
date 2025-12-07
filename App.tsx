@@ -161,6 +161,10 @@ const CityAutocomplete: React.FC<{
           className={`w-full ${icon ? 'pl-10' : 'pl-4'} ${rightElement ? 'pr-10' : 'pr-4'} py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all outline-none text-gray-800 font-medium placeholder-gray-400`}
           required={required}
           autoComplete="off"
+          aria-label={label || placeholder}
+          aria-autocomplete="list"
+          aria-controls={showSuggestions ? 'city-suggestions' : undefined}
+          aria-expanded={showSuggestions}
         />
         {rightElement && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -171,17 +175,23 @@ const CityAutocomplete: React.FC<{
       
       {/* Suggestions dropdown */}
       {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+        <div 
+          id="city-suggestions" 
+          role="listbox" 
+          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden animate-fade-in-down"
+        >
           {suggestions.map((city, index) => (
             <button
               key={city}
               type="button"
+              role="option"
+              aria-selected={index === focusedIndex}
               onClick={() => handleSuggestionClick(city)}
-              className={`w-full px-4 py-2.5 text-left hover:bg-emerald-50 flex items-center gap-2 transition-colors ${
+              className={`w-full px-4 py-2.5 text-left hover:bg-emerald-50 flex items-center gap-2 transition-all duration-200 ${
                 index === focusedIndex ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700'
               }`}
             >
-              <Icons.MapPin size={14} className="text-gray-400" />
+              <Icons.MapPin size={14} className="text-gray-400 flex-shrink-0" />
               <span className="font-medium">{city}</span>
             </button>
           ))}
@@ -226,7 +236,7 @@ const SearchForm: React.FC<{
 
   return (
     <div className="bg-white p-4 md:p-6 rounded-xl shadow-xl w-full max-w-4xl mx-auto -mt-16 md:-mt-20 relative z-10 border border-gray-100">
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end" aria-label="Formulaire de recherche de trajet">
         <CityAutocomplete
           value={from}
           onChange={setFrom}
@@ -276,6 +286,7 @@ const SearchForm: React.FC<{
               onChange={(e) => setDate(e.target.value)}
               className="w-full pl-10 pr-2 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all outline-none text-gray-800 font-medium text-sm"
               required
+              aria-label="Date de départ"
             />
           </div>
           <div className="relative group">
@@ -289,6 +300,7 @@ const SearchForm: React.FC<{
               value={passengers}
               onChange={(e) => setPassengers(parseInt(e.target.value))}
               className="w-full pl-10 pr-2 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all outline-none text-gray-800 font-medium"
+              aria-label="Nombre de passagers"
             />
           </div>
         </div>
@@ -296,10 +308,13 @@ const SearchForm: React.FC<{
         <button 
           type="submit" 
           disabled={isLoading}
-          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-lg hover:shadow-emerald-500/30 transition-all transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-lg hover:shadow-emerald-500/30 transition-all duration-300 transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
         >
           {isLoading ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <>
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Recherche en cours...</span>
+            </>
           ) : (
             <>
               <Icons.Search size={20} />
@@ -1460,33 +1475,35 @@ function AppContent() {
                <div className="absolute bottom-0 left-0 w-48 h-48 bg-yellow-400/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
                <div className="absolute top-1/2 left-1/4 w-32 h-32 bg-white/5 rounded-full blur-2xl animate-pulse"></div>
                
-               <div className="max-w-6xl mx-auto relative z-10 text-center">
-                 <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium mb-6">
-                   <span className="relative flex h-2 w-2">
-                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                     <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-400"></span>
-                   </span>
-                   +500 trajets disponibles aujourd'hui
-                 </div>
-                 <h1 className="text-4xl md:text-6xl font-extrabold mb-6 tracking-tight leading-tight">
-                   Votre voyage commence<br className="hidden md:block" /> <span className="text-yellow-300">ici.</span>
-                 </h1>
-                 <p className="text-xl md:text-2xl text-emerald-100 mb-8 max-w-2xl mx-auto">
-                   Rejoignez la plus grande communauté de covoiturage au Sénégal. Économique, convivial et sûr.
+                 <div className="max-w-6xl mx-auto relative z-10 text-center">
+                  <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium mb-6 animate-fade-in-down">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-400"></span>
+                    </span>
+                    +500 trajets disponibles aujourd'hui
+                  </div>
+                  <h1 className="text-4xl md:text-6xl font-extrabold mb-6 tracking-tight leading-tight animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                    Votre voyage commence<br className="hidden md:block" /> <span className="text-yellow-300 inline-block hover:scale-110 transition-transform duration-300">ici.</span>
+                  </h1>
+                  <p className="text-xl md:text-2xl text-emerald-100 mb-8 max-w-2xl mx-auto animate-fade-in" style={{ animationDelay: '0.2s' }}>
+                    Rejoignez la plus grande communauté de covoiturage au Sénégal. Économique, convivial et sûr.
                  </p>
                  
                  {/* Quick action buttons */}
-                 <div className="flex flex-wrap justify-center gap-4 mb-8">
+                 <div className="flex flex-wrap justify-center gap-4 mb-8 animate-fade-in" style={{ animationDelay: '0.3s' }}>
                    <button
                      onClick={() => setCurrentView('publish')}
-                     className="flex items-center gap-2 bg-white text-emerald-600 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+                     className="flex items-center gap-2 bg-white text-emerald-600 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 active:scale-95"
+                     aria-label="Proposer un trajet"
                    >
                      <Icons.PlusCircle size={20} />
                      Proposer un trajet
                    </button>
                    <button
                      onClick={() => document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' })}
-                     className="flex items-center gap-2 bg-emerald-700/50 backdrop-blur-sm text-white px-6 py-3 rounded-full font-bold border border-white/20 hover:bg-emerald-700/70 transition-all"
+                     className="flex items-center gap-2 bg-emerald-700/50 backdrop-blur-sm text-white px-6 py-3 rounded-full font-bold border border-white/20 hover:bg-emerald-700/70 transition-all duration-300 active:scale-95"
+                     aria-label="Trouver un trajet"
                    >
                      <Icons.Search size={20} />
                      Trouver un trajet
@@ -1494,12 +1511,12 @@ function AppContent() {
                  </div>
                  
                  {/* Stats */}
-                 <div className="flex justify-center gap-8 md:gap-16 mt-8 text-center">
-                   <div>
+                 <div className="flex justify-center gap-8 md:gap-16 mt-8 text-center animate-fade-in" style={{ animationDelay: '0.4s' }}>
+                   <div className="transform hover:scale-110 transition-transform duration-300">
                      <div className="text-3xl md:text-4xl font-bold text-white">15K+</div>
                      <div className="text-emerald-200 text-sm">Utilisateurs</div>
                    </div>
-                   <div>
+                   <div className="transform hover:scale-110 transition-transform duration-300">
                      <div className="text-3xl md:text-4xl font-bold text-white">50K+</div>
                      <div className="text-emerald-200 text-sm">Trajets réalisés</div>
                    </div>

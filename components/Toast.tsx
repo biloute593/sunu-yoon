@@ -59,10 +59,12 @@ const ToastItem: React.FC<{ toast: Toast; onDismiss: (id: string) => void }> = (
 
   return (
     <div 
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border ${bgLightMap[toast.type]} animate-slide-up`}
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border ${bgLightMap[toast.type]} animate-slide-in-right backdrop-blur-sm`}
       role="alert"
+      aria-live="polite"
+      aria-atomic="true"
     >
-      <div className={`p-1 rounded-full ${colorMap[toast.type]} text-white`}>
+      <div className={`p-1 rounded-full ${colorMap[toast.type]} text-white flex-shrink-0 animate-scale-in`}>
         {iconMap[toast.type]}
       </div>
       <p className={`flex-1 text-sm font-medium ${textMap[toast.type]}`}>
@@ -70,7 +72,8 @@ const ToastItem: React.FC<{ toast: Toast; onDismiss: (id: string) => void }> = (
       </p>
       <button
         onClick={() => onDismiss(toast.id)}
-        className="text-gray-400 hover:text-gray-600 transition-colors"
+        className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+        aria-label="Fermer la notification"
       >
         <Icons.X size={16} />
       </button>
