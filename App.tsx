@@ -1067,7 +1067,7 @@ const PublishForm: React.FC<{
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">Ou saisir manuellement (minimum 500 F)</label>
+                <label className="block text-sm font-medium text-gray-600 mb-2">Saisir votre tarif</label>
                 <div className="flex items-center rounded-2xl border border-gray-200 overflow-hidden">
                   <span className="px-4 py-3 text-gray-500 bg-gray-50 border-r border-gray-100 font-semibold">XOF</span>
                   <input
@@ -1078,7 +1078,7 @@ const PublishForm: React.FC<{
                     onChange={(e) => { const value = e.target.value.replace(/[^0-9]/g, ''); handleChange('price', value === '' ? 0 : parseInt(value, 10)); }}
                     onBlur={(e) => {
                       const value = Number(e.target.value);
-                      if (!value || value < 500) {
+                      if (!value || value < 1) {
                         handleChange('price', 500);
                       }
                     }}
@@ -1086,7 +1086,7 @@ const PublishForm: React.FC<{
                     className="w-full px-4 py-3 text-2xl font-bold text-emerald-600 bg-white focus:outline-none"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Les voyageurs apprécient les tarifs clairs. Ajustez librement à partir de 500 F.</p>
+                <p className="text-xs text-gray-500 mt-1">Les voyageurs apprécient les tarifs clairs.  Tapez librement le tarif de votre choix.</p>
               </div>
               <div className="flex items-center justify-between">
                 <div>
@@ -1504,7 +1504,7 @@ function AppContent() {
                </div>
             </div>
 
-            <div className="relative z-20 px-4 mt-8">
+            <div className="relative z-20 px-4 mt-32 mb-12">
               <div className="max-w-5xl mx-auto bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 md:p-8 flex flex-col lg:flex-row gap-6 items-center">
                 <div className="flex items-center gap-4 w-full lg:w-1/3">
                   <div className="relative">
@@ -1806,7 +1806,7 @@ function AppContent() {
                </div>
 
                {/* Stats rapides */}
-               <div className="max-w-6xl mx-auto mt-20 mb-8">
+               <div className="max-w-6xl mx-auto mt-32 mb-12">
                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
                    <div>
                      <div className="text-3xl font-bold text-gray-900">🇸🇳</div>
@@ -1842,7 +1842,7 @@ function AppContent() {
               userLocation={userLocation}
             />
             
-            <div className="mt-8">
+            <div className="mt-32 mb-12">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">
                   {isLoading ? 'Recherche en cours...' : `${searchResults.length} trajet${searchResults.length > 1 ? 's' : ''} disponible${searchResults.length > 1 ? 's' : ''}`}
