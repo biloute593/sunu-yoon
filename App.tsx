@@ -1483,15 +1483,15 @@ function AppContent() {
                     </span>
                     +500 trajets disponibles aujourd'hui
                   </div>
-                  <h1 className="text-4xl md:text-6xl font-extrabold mb-6 tracking-tight leading-tight animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                  <h1 className="text-4xl md:text-6xl font-extrabold mb-6 tracking-tight leading-tight animate-fade-in stagger-1">
                     Votre voyage commence<br className="hidden md:block" /> <span className="text-yellow-300 inline-block hover:scale-110 transition-transform duration-300">ici.</span>
                   </h1>
-                  <p className="text-xl md:text-2xl text-emerald-100 mb-8 max-w-2xl mx-auto animate-fade-in" style={{ animationDelay: '0.2s' }}>
+                  <p className="text-xl md:text-2xl text-emerald-100 mb-8 max-w-2xl mx-auto animate-fade-in stagger-2">
                     Rejoignez la plus grande communauté de covoiturage au Sénégal. Économique, convivial et sûr.
                  </p>
                  
                  {/* Quick action buttons */}
-                 <div className="flex flex-wrap justify-center gap-4 mb-8 animate-fade-in" style={{ animationDelay: '0.3s' }}>
+                 <div className="flex flex-wrap justify-center gap-4 mb-8 animate-fade-in stagger-3">
                    <button
                      onClick={() => setCurrentView('publish')}
                      className="flex items-center gap-2 bg-white text-emerald-600 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 active:scale-95"
@@ -1511,7 +1511,7 @@ function AppContent() {
                  </div>
                  
                  {/* Stats */}
-                 <div className="flex justify-center gap-8 md:gap-16 mt-8 text-center animate-fade-in" style={{ animationDelay: '0.4s' }}>
+                 <div className="flex justify-center gap-8 md:gap-16 mt-8 text-center animate-fade-in stagger-4">
                    <div className="transform hover:scale-110 transition-transform duration-300">
                      <div className="text-3xl md:text-4xl font-bold text-white">15K+</div>
                      <div className="text-emerald-200 text-sm">Utilisateurs</div>
@@ -1520,7 +1520,7 @@ function AppContent() {
                      <div className="text-3xl md:text-4xl font-bold text-white">50K+</div>
                      <div className="text-emerald-200 text-sm">Trajets réalisés</div>
                    </div>
-                   <div>
+                   <div className="transform hover:scale-110 transition-transform duration-300">
                      <div className="text-3xl md:text-4xl font-bold text-white">4.8</div>
                      <div className="text-emerald-200 text-sm">⭐ Note moyenne</div>
                    </div>
