@@ -8,6 +8,8 @@ import ChatWindow from './components/ChatWindow';
 import FAQSection from './components/FAQ';
 import { Icons } from './components/Icons';
 import LiveTrackingPanel from './components/LiveTrackingPanel';
+import RideRequest from './components/RideRequest';
+import DriverDashboard from './components/DriverDashboard';
 import { rideService, Ride as ApiRide, RideSearchParams } from './services/rideService';
 import { locationService } from './services/locationService';
 import { Coordinates, LocationState, DraftRide } from './types';
@@ -1311,6 +1313,11 @@ function AppContent() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showChatWindow, setShowChatWindow] = useState(false);
+  
+  // Transport à la demande (mode Uber)
+  const [showRequestRide, setShowRequestRide] = useState(false);
+  const [showDriverMode, setShowDriverMode] = useState(false);
+  const [isDriverAvailable, setIsDriverAvailable] = useState(false);
 
   // Geolocation State
   const [userLocation, setUserLocation] = useState<LocationState>({
@@ -1476,6 +1483,13 @@ function AppContent() {
                  
                  {/* Quick action buttons */}
                  <div className="flex flex-wrap justify-center gap-4 mb-8">
+                   <button
+                     onClick={() => setShowRequestRide(true)}
+                     className="flex items-center gap-2 bg-yellow-400 text-gray-900 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-2xl transform hover:scale-110 active:scale-95 transition-all duration-200"
+                   >
+                     <Icons.Navigation size={20} />
+                     🚖 Course maintenant
+                   </button>
                    <button
                      onClick={() => setCurrentView('publish')}
                      className="flex items-center gap-2 bg-white text-emerald-600 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-2xl transform hover:scale-110 active:scale-95 transition-all duration-200"
@@ -1979,7 +1993,13 @@ function AppContent() {
 
   return (
     <Layout 
-      onNavigate={setCurrentView} 
+      onNavigate={(view) => {
+        if (view === 'driver-mode') {
+          setShowDriverMode(true);
+        } else {
+          setCurrentView(view);
+        }
+      }} 
       currentView={currentView}
       user={user ? {
         id: user.id,
@@ -2003,6 +2023,60 @@ function AppContent() {
           setCurrentView('profile');
         }}
       />
+      
+      {/* Modal Demande de Course (Client) */}
+      {showRequestRide && userLocation.coords && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">🚖 Demander une course</h2>
+              <button
+                onClick={() => setShowRequestRide(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <Icons.X size={24} />
+              </button>
+            </div>
+            <div className="p-6">
+              <RideRequest
+                userLocation={userLocation.coords}
+                onRequestRide={(request) => {
+                  console.log('Demande de course:', request);
+                  // TODO: Envoyer au backend via WebSocket
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal Mode Chauffeur */}
+      {showDriverMode && userLocation.coords && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">🚗 Mode Chauffeur</h2>
+              <button
+                onClick={() => setShowDriverMode(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <Icons.X size={24} />
+              </button>
+            </div>
+            <div className="p-6">
+              <DriverDashboard
+                driverLocation={userLocation.coords}
+                isAvailable={isDriverAvailable}
+                onToggleAvailability={() => setIsDriverAvailable(!isDriverAvailable)}
+                onAcceptRide={(requestId, estimatedArrival) => {
+                  console.log('Course acceptée:', requestId, estimatedArrival);
+                  // TODO: Notifier le client via WebSocket
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
       
       {selectedRide && (
         <>

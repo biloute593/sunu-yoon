@@ -66,6 +66,12 @@ const Layout: React.FC<LayoutProps> = ({
                 <Icons.Search size={18} />
                 Rechercher
               </button>
+              <button 
+                onClick={() => onNavigate('driver-mode')}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+              >
+                🚗 Mode Chauffeur
+              </button>
               
               {user ? (
                 <div className="relative">
