@@ -156,7 +156,7 @@ const CityAutocomplete: React.FC<{
           onFocus={() => value.length >= 1 && suggestions.length > 0 && setShowSuggestions(true)}
           onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
           placeholder={placeholder}
-          className={`w-full ${icon ? 'pl-10' : 'pl-4'} ${rightElement ? 'pr-10' : 'pr-4'} py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all outline-none text-gray-800 font-medium placeholder-gray-400`}
+          className={`w-full ${icon ? 'pl-10' : 'pl-4'} ${rightElement ? 'pr-10' : 'pr-4'} py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 hover:border-gray-300 transition-all duration-200 outline-none text-gray-800 font-medium placeholder-gray-400`}
           required={required}
           autoComplete="off"
         />
@@ -175,8 +175,8 @@ const CityAutocomplete: React.FC<{
               key={city}
               type="button"
               onClick={() => handleSuggestionClick(city)}
-              className={`w-full px-4 py-2.5 text-left hover:bg-emerald-50 flex items-center gap-2 transition-colors ${
-                index === focusedIndex ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700'
+              className={`w-full px-4 py-2.5 text-left hover:bg-emerald-50 flex items-center gap-2 transition-all duration-150 ${
+                index === focusedIndex ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-gray-700'
               }`}
             >
               <Icons.MapPin size={14} className="text-gray-400" />
@@ -325,7 +325,7 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
   return (
     <div 
       onClick={onClick}
-      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-7 hover:shadow-xl hover:border-emerald-300 transition-all cursor-pointer group flex flex-col min-h-[320px]"
+      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-7 hover:shadow-xl hover:border-emerald-300 transition-all transform hover:-translate-y-2 cursor-pointer group flex flex-col min-h-[320px]"
     >
       <div className="flex justify-between items-start mb-6">
         <div className="flex flex-col relative pl-6 border-l-2 border-emerald-200 space-y-6">
@@ -1053,14 +1053,14 @@ const PublishForm: React.FC<{
                   <button
                     type="button"
                     onClick={() => handleChange('price', Math.max(500, formData.price - 500))}
-                    className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900"
+                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
                   >
                     -
                   </button>
                   <button
                     type="button"
                     onClick={() => handleChange('price', formData.price + 500)}
-                    className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900"
+                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
                   >
                     +
                   </button>
@@ -1068,7 +1068,7 @@ const PublishForm: React.FC<{
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">Saisir votre tarif</label>
-                <div className="flex items-center rounded-2xl border border-gray-200 overflow-hidden">
+                <div className="flex items-center rounded-2xl border-2 border-gray-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 overflow-hidden transition-all">
                   <span className="px-4 py-3 text-gray-500 bg-gray-50 border-r border-gray-100 font-semibold">XOF</span>
                   <input
                     type="text"
@@ -1097,14 +1097,14 @@ const PublishForm: React.FC<{
                   <button
                     type="button"
                     onClick={() => handleChange('seats', Math.max(1, formData.seats - 1))}
-                    className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900"
+                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
                   >
                     -
                   </button>
                   <button
                     type="button"
                     onClick={() => handleChange('seats', Math.min(7, formData.seats + 1))}
-                    className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900"
+                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
                   >
                     +
                   </button>
@@ -1115,7 +1115,7 @@ const PublishForm: React.FC<{
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting || !isFormValid}
-                className="w-full py-4 rounded-2xl font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 shadow-lg hover:from-emerald-700 hover:to-emerald-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-4 rounded-2xl font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 shadow-lg hover:shadow-2xl hover:from-emerald-700 hover:to-emerald-600 transform hover:scale-[1.02] active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 {isSubmitting ? (
                   <>
@@ -1131,7 +1131,7 @@ const PublishForm: React.FC<{
               </button>
               <button
                 onClick={onCancel}
-                className="w-full py-3 rounded-2xl font-semibold text-gray-500 hover:text-gray-900 border border-gray-200"
+                className="w-full py-3 rounded-2xl font-semibold text-gray-500 hover:text-gray-900 border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all transform active:scale-95"
               >
                 Annuler
               </button>
@@ -1472,14 +1472,14 @@ function AppContent() {
                  <div className="flex flex-wrap justify-center gap-4 mb-8">
                    <button
                      onClick={() => setCurrentView('publish')}
-                     className="flex items-center gap-2 bg-white text-emerald-600 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+                     className="flex items-center gap-2 bg-white text-emerald-600 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-2xl transform hover:scale-110 active:scale-95 transition-all duration-200"
                    >
                      <Icons.PlusCircle size={20} />
                      Proposer un trajet
                    </button>
                    <button
                      onClick={() => document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' })}
-                     className="flex items-center gap-2 bg-emerald-700/50 backdrop-blur-sm text-white px-6 py-3 rounded-full font-bold border border-white/20 hover:bg-emerald-700/70 transition-all"
+                     className="flex items-center gap-2 bg-emerald-700/50 backdrop-blur-sm text-white px-6 py-3 rounded-full font-bold border border-white/20 hover:bg-emerald-700/70 transform hover:scale-105 active:scale-95 transition-all duration-200"
                    >
                      <Icons.Search size={20} />
                      Trouver un trajet

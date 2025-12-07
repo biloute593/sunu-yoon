@@ -9,6 +9,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 80px;
 }
 
 body {
@@ -18,6 +19,7 @@ body {
   background-color: #f9fafb;
   color: #111827;
   line-height: 1.5;
+  overflow-x: hidden;
 }
 
 /* Scrollbar Styling */
@@ -455,4 +457,59 @@ input[type="number"] {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Performance Optimizations */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+/* Smooth Transitions Global */
+button, a, input, textarea, select {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Focus Visible for Accessibility */
+*:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Selection Styling */
+::selection {
+  background-color: #10b981;
+  color: white;
+}
+
+::-moz-selection {
+  background-color: #10b981;
+  color: white;
+}
+
+/* Prevent Layout Shift */
+.prevent-shift {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+/* Smooth Page Transitions */
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Reduce Motion for Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
