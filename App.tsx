@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import CookieBanner from './components/CookieBanner';
@@ -1071,18 +1071,11 @@ const PublishForm: React.FC<{
                 <div className="flex items-center rounded-2xl border border-gray-200 overflow-hidden">
                   <span className="px-4 py-3 text-gray-500 bg-gray-50 border-r border-gray-100 font-semibold">XOF</span>
                   <input
-                    type="number"
-                    min={500}
-                    step={50}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={formData.price}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '') {
-                        handleChange('price', '');
-                      } else {
-                        handleChange('price', Number(value));
-                      }
-                    }}
+                    onChange={(e) => { const value = e.target.value.replace(/[^0-9]/g, ''); handleChange('price', value === '' ? 0 : parseInt(value, 10)); }}
                     onBlur={(e) => {
                       const value = Number(e.target.value);
                       if (!value || value < 500) {
@@ -1511,7 +1504,7 @@ function AppContent() {
                </div>
             </div>
 
-            <div className="relative z-20 px-4 -mt-12">
+            <div className="relative z-20 px-4 mt-8">
               <div className="max-w-5xl mx-auto bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 md:p-8 flex flex-col lg:flex-row gap-6 items-center">
                 <div className="flex items-center gap-4 w-full lg:w-1/3">
                   <div className="relative">
@@ -2045,3 +2038,4 @@ function App() {
 }
 
 export default App;
+
