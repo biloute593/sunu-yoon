@@ -18,7 +18,10 @@ type ErrorCallback = (message: string) => void;
 class TrackingService {
   private streams = new Map<string, EventSource>();
   private lastPushByRide = new Map<string, number>();
+  private reconnectAttempts = new Map<string, number>();
   private MIN_PUSH_INTERVAL_MS = 1500;
+  private MAX_RECONNECT_ATTEMPTS = 5;
+  private RECONNECT_DELAY_MS = 3000;
 
   async publishDriverLocation(rideId: string, payload: {
     coords: Coordinates;
@@ -94,6 +97,7 @@ class TrackingService {
 
     source.onmessage = (event) => {
       try {
+        this.reconnectAttempts.set(rideId, 0);
         const data = JSON.parse(event.data) as TrackingUpdate;
         onUpdate(data);
       } catch (error) {
@@ -101,11 +105,42 @@ class TrackingService {
       }
     };
 
-    source.onerror = () => {
-      onError?.('Connexion interrompue. Nous réessaierons automatiquement.');
-      source.close();
-      this.streams.delete(rideId);
+    source.onerror = (error) => {
+      console.error('Erreur SSE pour trajet', rideId, error);
+      const attempts = this.reconnectAttempts.get(rideId) || 0;
+      
+      if (attempts >= this.MAX_RECONNECT_ATTEMPTS) {
+        onError?.('Impossible de maintenir la connexion après plusieurs tentatives');
+        this.unsubscribeFromRide(rideId);
+        this.reconnectAttempts.delete(rideId);
+        return;
+      }
+      
+      this.reconnectAttempts.set(rideId, attempts + 1);
+      const delay = Math.min(this.RECONNECT_DELAY_MS * Math.pow(2, attempts), 30000);
+      
+      setTimeout(() => {
+        if (source.readyState === EventSource.CLOSED) {
+          console.log(`Reconnexion SSE tentative ${attempts + 1}/${this.MAX_RECONNECT_ATTEMPTS}`);
+          this.subscribeToRide(rideId, onUpdate, onError);
+        }
+      }, delay);
     };
+
+    source.onopen = () => {
+      console.log('Stream SSE ouvert pour', rideId);
+      this.reconnectAttempts.set(rideId, 0);
+    };
+
+    const timeoutId = setTimeout(() => {
+      if (source.readyState === EventSource.CONNECTING) {
+        console.warn('Timeout de connexion SSE');
+        source.close();
+        onError?.('Délai de connexion dépassé');
+      }
+    }, 10000);
+
+    source.addEventListener('open', () => clearTimeout(timeoutId));
 
     this.streams.set(rideId, source);
 

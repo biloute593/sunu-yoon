@@ -1,5 +1,16 @@
 // Configuration de l'API
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_TIMEOUT = 15000; // 15 secondes
+
+// Helper pour ajouter timeout aux fetch
+const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout = API_TIMEOUT): Promise<Response> => {
+  return Promise.race([
+    fetch(url, options),
+    new Promise<Response>((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout: Requête trop longue')), timeout)
+    )
+  ]);
+};
 
 // Types pour les réponses API
 interface ApiResponse<T> {

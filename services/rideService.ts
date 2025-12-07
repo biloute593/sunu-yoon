@@ -1,5 +1,26 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+interface CachedResult {
+  data: any;
+  timestamp: number;
+}
+
+const searchCache = new Map<string, CachedResult>();
+const CACHE_DURATION_MS = 2 * 60 * 1000; // 2 minutes
+
+const getCacheKey = (origin: string, destination: string, date: string): string => {
+  return `${origin}|${destination}|${date}`;
+};
+
+const getCachedResult = (key: string): any | null => {
+  const cached = searchCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION_MS) {
+    return cached.data;
+  }
+  searchCache.delete(key);
+  return null;
+};
+
 export interface RideDriver {
   id: string;
   firstName: string;

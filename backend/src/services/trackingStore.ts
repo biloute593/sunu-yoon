@@ -22,6 +22,17 @@ interface TrackingRecord {
 const liveLocations = new Map<string, TrackingRecord>();
 const subscribers = new Map<string, Set<Response>>();
 const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+const CLEANUP_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+
+// Nettoyage périodique automatique
+setInterval(() => {
+  for (const [rideId, record] of liveLocations.entries()) {
+    if (isStale(record)) {
+      liveLocations.delete(rideId);
+      logger.info(`Position expirée supprimée: ${rideId}`);
+    }
+  }
+}, CLEANUP_INTERVAL_MS);
 
 const toSnapshot = (record: TrackingRecord): TrackingSnapshot => ({
   rideId: record.rideId,

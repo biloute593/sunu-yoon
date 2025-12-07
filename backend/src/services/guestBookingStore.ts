@@ -29,9 +29,16 @@ const EXPIRATION_MINUTES = 12 * 60; // 12h pour libérer automatiquement les ré
 
 class GuestBookingStore {
   private bookings = new Map<string, GuestBookingSnapshot>();
+  private phoneBookingCount = new Map<string, number>();
+  private MAX_BOOKINGS_PER_PHONE = 5;
 
   create(payload: CreateGuestBookingInput) {
     this.pruneExpired();
+    
+    const phoneCount = this.phoneBookingCount.get(payload.passengerPhone) || 0;
+    if (phoneCount >= this.MAX_BOOKINGS_PER_PHONE) {
+      throw new Error(`Limite de ${this.MAX_BOOKINGS_PER_PHONE} réservations atteinte pour ce numéro`);
+    }
 
     const id = randomUUID();
     const record: GuestBookingSnapshot = {
@@ -48,6 +55,7 @@ class GuestBookingStore {
     };
 
     this.bookings.set(id, record);
+    this.phoneBookingCount.set(payload.passengerPhone, (this.phoneBookingCount.get(payload.passengerPhone) || 0) + 1);
     return record;
   }
 
@@ -71,6 +79,13 @@ class GuestBookingStore {
     for (const [id, booking] of this.bookings.entries()) {
       if (new Date(booking.createdAt).getTime() < expirationThreshold) {
         this.bookings.delete(id);
+        const currentCount = this.phoneBookingCount.get(booking.passengerPhone) || 0;
+        if (currentCount > 0) {
+          this.phoneBookingCount.set(booking.passengerPhone, currentCount - 1);
+        }
+        if (this.phoneBookingCount.get(booking.passengerPhone) === 0) {
+          this.phoneBookingCount.delete(booking.passengerPhone);
+        }
       }
     }
   }

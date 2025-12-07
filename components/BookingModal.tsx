@@ -50,10 +50,20 @@ const BookingModal: React.FC<BookingModalProps> = ({
   const totalPrice = price * selectedSeats;
 
   const handleSelectSeats = () => {
-    if (!passengerName.trim() || !passengerPhone.trim()) {
-      setFormError('Merci de renseigner votre nom complet et votre numéro.');
+    const name = passengerName.trim();
+    const phone = passengerPhone.trim();
+    
+    if (!name || name.length < 2) {
+      setFormError('Merci de renseigner votre nom complet (minimum 2 caractères).');
       return;
     }
+    
+    const phoneRegex = /^(\+221|00221)?[7][0-9]{8}$/;
+    if (!phone || !phoneRegex.test(phone)) {
+      setFormError('Numéro invalide. Utilisez un numéro sénégalais (ex: 771234567).');
+      return;
+    }
+    
     setFormError('');
     setStep('payment');
   };
@@ -82,7 +92,19 @@ const BookingModal: React.FC<BookingModalProps> = ({
     } catch (err: any) {
       console.error('Erreur réservation:', err);
       const apiMessage = err?.response?.data?.error;
-      setError(apiMessage || err?.message || 'Erreur lors de la réservation');
+      
+      let errorMessage = 'Erreur lors de la réservation';
+      if (apiMessage) {
+        errorMessage = apiMessage;
+      } else if (err?.message?.includes('fetch')) {
+        errorMessage = 'Connexion impossible. Vérifiez votre connexion internet.';
+      } else if (err?.message?.includes('Network')) {
+        errorMessage = 'Erreur réseau. Veuillez réessayer.';
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
       setStep('error');
     } finally {
       setIsLoading(false);

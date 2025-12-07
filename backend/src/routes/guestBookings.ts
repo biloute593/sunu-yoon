@@ -9,8 +9,14 @@ const router = Router();
 
 const inputValidators = [
   body('rideId').isUUID().withMessage('Trajet invalide'),
-  body('passengerName').trim().notEmpty().withMessage('Nom requis'),
-  body('passengerPhone').trim().notEmpty().withMessage('Téléphone requis'),
+  body('passengerName')
+    .trim()
+    .notEmpty().withMessage('Nom requis')
+    .isLength({ min: 2, max: 100 }).withMessage('Nom invalide (2-100 caractères)'),
+  body('passengerPhone')
+    .trim()
+    .notEmpty().withMessage('Téléphone requis')
+    .matches(/^(\+221|00221)?[7][0-9]{8}$/).withMessage('Numéro sénégalais invalide (ex: 771234567)'),
   body('seats').optional().isInt({ min: 1, max: 6 }).withMessage('Nombre de places invalide'),
   body('paymentMethod')
     .optional()
@@ -19,7 +25,11 @@ const inputValidators = [
   body('contactPreference')
     .optional()
     .isIn(['call', 'whatsapp', 'sms'])
-    .withMessage('Préférence de contact invalide')
+    .withMessage('Préférence de contact invalide'),
+  body('notes')
+    .optional()
+    .isLength({ max: 500 })
+    .withMessage('Les notes ne doivent pas dépasser 500 caractères')
 ];
 
 router.post('/', inputValidators, async (req: Request, res: Response, next: NextFunction) => {
