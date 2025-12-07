@@ -325,10 +325,10 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
   return (
     <div 
       onClick={onClick}
-      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-xl hover:border-emerald-300 transition-all cursor-pointer group flex flex-col min-h-[280px]"
+      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-7 hover:shadow-xl hover:border-emerald-300 transition-all cursor-pointer group flex flex-col min-h-[320px]"
     >
-      <div className="flex justify-between items-start mb-5">
-        <div className="flex flex-col relative pl-6 border-l-2 border-emerald-200 space-y-5">
+      <div className="flex justify-between items-start mb-6">
+        <div className="flex flex-col relative pl-6 border-l-2 border-emerald-200 space-y-6">
           <div className="relative">
             <div className="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-emerald-100"></div>
             <div className="flex flex-col">
@@ -357,16 +357,16 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
 
       {/* Features tags */}
       {ride.features.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-4">
+        <div className="flex flex-wrap gap-2 mb-5">
           {ride.features.slice(0, 3).map(f => (
-            <span key={f} className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+            <span key={f} className="text-xs px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full">
               {f === 'Climatisation' ? '❄️' : f === 'Musique' ? '🎵' : f === 'Bagages acceptés' ? '🧳' : f === 'Non-fumeur' ? '🚭' : '✓'} {f}
             </span>
           ))}
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-5 border-t border-gray-100 mt-auto">
+      <div className="flex items-center justify-between pt-6 border-t border-gray-100 mt-auto">
         <div className="flex items-center gap-4">
           <div className="relative">
             <img 
@@ -1874,17 +1874,17 @@ function AppContent() {
               )}
               
               {isLoading ? (
-                 <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+                 <div className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
                    {[1,2,3,4,5,6].map(i => (
-                     <div key={i} className="min-h-[280px] bg-white rounded-2xl border border-gray-100 p-6 animate-pulse flex flex-col shadow-sm">
-                       <div className="flex justify-between mb-4">
-                         <div className="space-y-3 flex-1">
+                     <div key={i} className="min-h-[320px] bg-white rounded-2xl border border-gray-100 p-7 animate-pulse flex flex-col shadow-sm">
+                       <div className="flex justify-between mb-6">
+                         <div className="space-y-4 flex-1">
                            <div className="h-5 bg-gray-200 rounded w-2/5"></div>
                            <div className="h-4 bg-gray-100 rounded w-3/5"></div>
                          </div>
                          <div className="h-8 bg-gray-200 rounded-lg w-24"></div>
                        </div>
-                       <div className="flex items-center gap-4 mt-auto pt-5 border-t border-gray-100">
+                       <div className="flex items-center gap-4 mt-auto pt-6 border-t border-gray-100">
                          <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
                          <div className="space-y-2 flex-1">
                            <div className="h-4 bg-gray-200 rounded w-2/3"></div>
@@ -1895,7 +1895,7 @@ function AppContent() {
                    ))}
                  </div>
               ) : (
-                <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
                   {searchResults.map(ride => (
                     <RideCard key={ride.id} ride={ride} onClick={() => handleRideClick(ride)} />
                   ))}
