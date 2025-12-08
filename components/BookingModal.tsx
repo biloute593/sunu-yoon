@@ -462,10 +462,10 @@ const BookingModal: React.FC<BookingModalProps> = ({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={step !== 'processing' ? resetAndClose : undefined}></div>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden animate-slide-up">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] relative z-10 overflow-hidden animate-slide-up flex flex-col">
         {/* Header */}
         {step !== 'processing' && step !== 'success' && step !== 'error' && (
-          <div className="p-6 border-b border-gray-100">
+          <div className="p-6 border-b border-gray-100 flex-shrink-0">
             <div className="flex justify-between items-center">
               <h3 className="text-xl font-bold text-gray-900">
                 {step === 'seats' && 'Réserver ce trajet'}
@@ -478,8 +478,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
           </div>
         )}
 
-        {/* Content */}
-        <div className="p-6">
+        {/* Content - Scrollable */}
+        <div className="p-6 overflow-y-auto flex-1">
           {step === 'seats' && renderSeatsSelection()}
           {step === 'payment' && renderPaymentSelection()}
           {step === 'processing' && renderProcessing()}

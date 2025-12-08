@@ -1155,8 +1155,9 @@ const PublishForm: React.FC<{
 };
 
 const ProfileView: React.FC<{ 
-  onNavigate: (v: string) => void 
-}> = ({ onNavigate }) => {
+  onNavigate: (v: string) => void,
+  refreshKey?: number
+}> = ({ onNavigate, refreshKey = 0 }) => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'bookings' | 'announcements'>('bookings');
   const [myRides, setMyRides] = useState<Ride[]>([]);
@@ -1165,6 +1166,7 @@ const ProfileView: React.FC<{
 
   useEffect(() => {
     const loadData = async () => {
+      setIsLoading(true);
       try {
         const rides = await rideService.getMyRides();
         setMyRides(rides.map(mapApiRideToRide));
@@ -1176,7 +1178,7 @@ const ProfileView: React.FC<{
       }
     };
     loadData();
-  }, []);
+  }, [refreshKey]);
 
   if (!user) return null;
 
@@ -1308,6 +1310,7 @@ function AppContent() {
   const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   
   // Modals
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -1444,8 +1447,10 @@ function AppContent() {
     setShowBookingModal(true);
   };
 
-  const handlePublishRide = (draft: DraftRide) => {
+  const handlePublishRide = async (draft: DraftRide) => {
     // Le trajet est déjà créé dans PublishForm via l'API
+    // Forcer le rechargement des trajets
+    setProfileRefreshKey(prev => prev + 1);
     setCurrentView('profile');
   };
 
@@ -1972,7 +1977,7 @@ function AppContent() {
            setCurrentView('home');
            return null;
         }
-        return <ProfileView onNavigate={setCurrentView} />;
+        return <ProfileView onNavigate={setCurrentView} refreshKey={profileRefreshKey} />;
 
       default:
         return null;
