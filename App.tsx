@@ -1307,6 +1307,7 @@ function AppContent() {
   
   const [currentView, setCurrentView] = useState('home'); 
   const [searchResults, setSearchResults] = useState<Ride[]>([]);
+  const [publishedRides, setPublishedRides] = useState<Ride[]>([]); // Stock des trajets publiés
   const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
@@ -1382,6 +1383,19 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Charger les trajets publiés depuis le localStorage au démarrage
+  useEffect(() => {
+    try {
+      const storedRides = localStorage.getItem('publishedRides');
+      if (storedRides) {
+        const rides = JSON.parse(storedRides);
+        setPublishedRides(rides);
+      }
+    } catch (error) {
+      console.error('Erreur chargement trajets:', error);
+    }
+  }, []);
+
   const handleGeolocate = useCallback(async () => {
     setUserLocation(prev => ({ ...prev, loading: true, error: null }));
 
@@ -1428,11 +1442,36 @@ function AppContent() {
         seats: params.passengers
       });
       
-      setSearchResults(rides.map(mapApiRideToRide));
+      const apiRides = rides.map(mapApiRideToRide);
+      
+      // Filtrer les trajets publiés localement qui correspondent à la recherche
+      const matchingLocalRides = publishedRides.filter(ride => {
+        const originMatch = ride.origin.toLowerCase().includes(params.origin.toLowerCase()) ||
+                           params.origin.toLowerCase().includes(ride.origin.toLowerCase());
+        const destMatch = ride.destination.toLowerCase().includes(params.destination.toLowerCase()) ||
+                         params.destination.toLowerCase().includes(ride.destination.toLowerCase());
+        const dateMatch = ride.departureTime.startsWith(params.date);
+        
+        return originMatch && destMatch && dateMatch && ride.seatsAvailable >= params.passengers;
+      });
+      
+      // Fusionner les résultats : trajets locaux en premier
+      const allRides = [...matchingLocalRides, ...apiRides];
+      setSearchResults(allRides);
       setCurrentView('search');
     } catch (error) {
       console.error('Erreur recherche:', error);
-      setSearchResults([]);
+      // En cas d'erreur API, afficher quand même les trajets locaux
+      const matchingLocalRides = publishedRides.filter(ride => {
+        const originMatch = ride.origin.toLowerCase().includes(params.origin.toLowerCase()) ||
+                           params.origin.toLowerCase().includes(ride.origin.toLowerCase());
+        const destMatch = ride.destination.toLowerCase().includes(params.destination.toLowerCase()) ||
+                         params.destination.toLowerCase().includes(ride.destination.toLowerCase());
+        const dateMatch = ride.departureTime.startsWith(params.date);
+        
+        return originMatch && destMatch && dateMatch && ride.seatsAvailable >= params.passengers;
+      });
+      setSearchResults(matchingLocalRides);
     } finally {
       setIsLoading(false);
     }
@@ -1448,10 +1487,57 @@ function AppContent() {
   };
 
   const handlePublishRide = async (draft: DraftRide) => {
-    // Le trajet est déjà créé dans PublishForm via l'API
-    // Forcer le rechargement des trajets
-    setProfileRefreshKey(prev => prev + 1);
-    setCurrentView('profile');
+    try {
+      // Créer un trajet à partir du draft
+      const newRide: Ride = {
+        id: `local_${Date.now()}`,
+        driver: user ? {
+          id: user.id,
+          name: `${user.firstName} ${user.lastName || ''}`.trim(),
+          avatarUrl: user.avatarUrl || `https://ui-avatars.com/api/?name=${user.firstName}&background=10b981&color=fff`,
+          rating: 4.5,
+          reviewCount: 0,
+          isVerified: user.isVerified || false
+        } : {
+          id: 'guest',
+          name: 'Nouveau conducteur',
+          avatarUrl: 'https://ui-avatars.com/api/?name=Guest&background=10b981&color=fff',
+          rating: 4.5,
+          reviewCount: 0,
+          isVerified: false
+        },
+        origin: draft.origin,
+        destination: draft.destination,
+        departureTime: `${draft.date}T${draft.time}:00`,
+        price: draft.price,
+        currency: 'XOF',
+        seatsAvailable: draft.seats,
+        totalSeats: draft.seats,
+        carModel: draft.carModel || 'Véhicule',
+        description: draft.description,
+        features: draft.features,
+        duration: '~3h'
+      };
+
+      // Ajouter le trajet au stock local
+      setPublishedRides(prev => [newRide, ...prev]);
+      
+      // Si on a une recherche active, l'ajouter aussi aux résultats
+      if (searchResults.length > 0 || searchParams) {
+        setSearchResults(prev => [newRide, ...prev]);
+      }
+
+      // Sauvegarder dans localStorage pour persistance
+      const storedRides = JSON.parse(localStorage.getItem('publishedRides') || '[]');
+      storedRides.push(newRide);
+      localStorage.setItem('publishedRides', JSON.stringify(storedRides));
+
+      // Forcer le rechargement du profil
+      setProfileRefreshKey(prev => prev + 1);
+      setCurrentView('profile');
+    } catch (error) {
+      console.error('Erreur lors de la publication:', error);
+    }
   };
 
   const handleBookingSuccess = (bookingId: string) => {
@@ -1615,244 +1701,66 @@ function AppContent() {
             </div>
             
             <div className="px-4 pb-20">
-               <div className="max-w-6xl mx-auto mt-8 mb-6 flex flex-col md:flex-row md:items-center gap-4">
-                 <button
-                   onClick={() => setCurrentView('publish')}
-                   className="w-full md:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
-                 >
-                   <Icons.PlusCircle size={18} />
-                   Publier un trajet
-                 </button>
-                 <p className="text-sm text-gray-500 md:ml-4">Publiez gratuitement, aucune inscription nécessaire.</p>
+               {/* Actions rapides */}
+               <div className="max-w-4xl mx-auto mt-8 mb-6">
+                 <div className="grid grid-cols-2 gap-4">
+                   <button
+                     onClick={() => setCurrentView('publish')}
+                     className="px-6 py-4 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex flex-col items-center justify-center gap-2"
+                   >
+                     <Icons.PlusCircle size={28} />
+                     <span>Proposer un trajet</span>
+                   </button>
+                   <button
+                     onClick={() => document.getElementById('search-origin')?.focus()}
+                     className="px-6 py-4 rounded-2xl bg-white border-2 border-emerald-600 text-emerald-600 font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex flex-col items-center justify-center gap-2"
+                   >
+                     <Icons.Search size={28} />
+                     <span>Trouver un trajet</span>
+                   </button>
+                 </div>
                </div>
+
+               {/* Formulaire de recherche */}
                <SearchForm 
                  onSearch={handleSearch} 
                  isLoading={isLoading} 
                  onLocate={handleGeolocate} 
                  userLocation={userLocation}
                />
-               
-               <div className="max-w-6xl mx-auto">
-                 <LiveTrackingPanel userLocation={userLocation.coords} />
-               </div>
 
-               {/* Comment ça marche */}
-               <div className="max-w-6xl mx-auto mt-20">
+               {/* Comment ça marche - Version simplifiée */}
+               <div className="max-w-4xl mx-auto mt-20 mb-20">
                  <div className="text-center mb-12">
                    <h2 className="text-2xl font-bold text-gray-900 mb-4">Comment ça marche ?</h2>
-                   <p className="text-gray-600 max-w-xl mx-auto">En 3 étapes simples, trouvez ou proposez un trajet</p>
+                   <p className="text-gray-600 max-w-xl mx-auto">En 3 étapes simples</p>
                  </div>
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div className="text-center relative">
-                       <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold shadow-sm">
+                    <div className="text-center">
+                       <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
                          1
                        </div>
                        <h3 className="text-lg font-bold mb-2 text-gray-900">Recherchez</h3>
-                       <p className="text-gray-600 text-sm">Indiquez votre départ, destination et date. Trouvez les trajets disponibles.</p>
-                       <div className="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-emerald-200"></div>
+                       <p className="text-gray-600 text-sm">Entrez votre itinéraire</p>
                     </div>
-                    <div className="text-center relative">
-                       <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold shadow-sm">
+                    <div className="text-center">
+                       <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
                          2
                        </div>
                        <h3 className="text-lg font-bold mb-2 text-gray-900">Réservez</h3>
-                       <p className="text-gray-600 text-sm">Choisissez votre trajet, réservez vos places et payez en ligne ou en espèces.</p>
-                       <div className="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-emerald-200"></div>
+                       <p className="text-gray-600 text-sm">Contactez le conducteur</p>
                     </div>
                     <div className="text-center">
-                       <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold shadow-sm">
+                       <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
                          3
                        </div>
                        <h3 className="text-lg font-bold mb-2 text-gray-900">Voyagez</h3>
-                       <p className="text-gray-600 text-sm">Retrouvez votre conducteur au point de rendez-vous et profitez du trajet !</p>
+                       <p className="text-gray-600 text-sm">Partez ensemble</p>
                     </div>
-                 </div>
-               </div>
-
-               <div className="max-w-6xl mx-auto mt-20">
-                 <h2 className="text-2xl font-bold text-gray-900 mb-8">Pourquoi utiliser Sunu Yoon ?</h2>
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
-                       <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
-                         <Icons.Shield size={24} />
-                       </div>
-                       <h3 className="text-lg font-bold mb-2">Confiance et Sécurité</h3>
-                       <p className="text-gray-600">Tous nos membres sont vérifiés. Consultez les avis avant de voyager.</p>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
-                       <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4">
-                         <Icons.Car size={24} />
-                       </div>
-                       <h3 className="text-lg font-bold mb-2">Trajets partout</h3>
-                       <p className="text-gray-600">De Dakar à Ziguinchor, trouvez un trajet même à la dernière minute.</p>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
-                       <div className="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mb-4">
-                         <Icons.Star size={24} />
-                       </div>
-                       <h3 className="text-lg font-bold mb-2">Prix bas</h3>
-                       <p className="text-gray-600">Voyagez moins cher qu'en bus ou taxi '7 places'.</p>
-                    </div>
-                 </div>
-               </div>
-
-               {/* Témoignages */}
-               <div className="max-w-6xl mx-auto mt-20">
-                 <div className="text-center mb-12">
-                   <h2 className="text-2xl font-bold text-gray-900 mb-4">Ce que disent nos voyageurs 💬</h2>
-                   <p className="text-gray-600">Des milliers de Sénégalais nous font confiance</p>
-                 </div>
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {[
-                      {
-                        name: 'Fatou Diallo',
-                        city: 'Dakar',
-                        text: "J'utilise Sunu Yoon chaque semaine pour aller à Thiès voir ma famille. C'est moins cher et plus confortable que le bus !",
-                        rating: 5,
-                        trips: 24,
-                        avatar: 'FD'
-                      },
-                      {
-                        name: 'Mamadou Ndiaye',
-                        city: 'Saint-Louis',
-                        text: "En tant que conducteur, Sunu Yoon me permet de rentabiliser mes trajets. L'application est simple et les passagers sont respectueux.",
-                        rating: 5,
-                        trips: 156,
-                        avatar: 'MN',
-                        isDriver: true
-                      },
-                      {
-                        name: 'Aissatou Ba',
-                        city: 'Touba',
-                        text: "Super application ! J'ai fait Dakar-Touba pour le Magal à un prix imbattable. Le conducteur était ponctuel et agréable.",
-                        rating: 5,
-                        trips: 8,
-                        avatar: 'AB'
-                      }
-                    ].map((testimonial, idx) => (
-                      <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative">
-                        <div className="absolute -top-3 -left-3 text-4xl opacity-20">❝</div>
-                        <p className="text-gray-700 mb-6 relative z-10 italic leading-relaxed">
-                          "{testimonial.text}"
-                        </p>
-                        <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
-                          <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center text-white font-bold shadow-sm">
-                            {testimonial.avatar}
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-bold text-gray-900 flex items-center gap-2">
-                              {testimonial.name}
-                              {testimonial.isDriver && (
-                                <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Conducteur</span>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-500">{testimonial.city} • {testimonial.trips} trajets</div>
-                          </div>
-                          <div className="flex items-center gap-0.5">
-                            {[...Array(testimonial.rating)].map((_, i) => (
-                              <Icons.Star key={i} size={14} className="text-yellow-400 fill-yellow-400" />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                 </div>
-               </div>
-
-               {/* Trajets populaires */}
-               <div className="max-w-6xl mx-auto mt-20">
-                 <h2 className="text-2xl font-bold text-gray-900 mb-8">🔥 Trajets populaires</h2>
-                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {[
-                      { from: 'Dakar', to: 'Touba', price: '3 500' },
-                      { from: 'Dakar', to: 'Saint-Louis', price: '4 000' },
-                      { from: 'Dakar', to: 'Thiès', price: '1 500' },
-                      { from: 'Dakar', to: 'Mbour', price: '2 000' },
-                      { from: 'Dakar', to: 'Kaolack', price: '3 000' },
-                      { from: 'Dakar', to: 'Ziguinchor', price: '7 500' },
-                      { from: 'Thiès', to: 'Touba', price: '2 500' },
-                      { from: 'Saint-Louis', to: 'Dakar', price: '4 000' },
-                    ].map((route, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleSearch({ origin: route.from, destination: route.to, date: new Date().toISOString().split('T')[0], passengers: 1 })}
-                        className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-emerald-200 transition-all text-left group"
-                      >
-                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-                          <span className="font-medium text-gray-900">{route.from}</span>
-                          <Icons.ChevronRight size={14} className="text-gray-400 group-hover:text-emerald-500 transition-colors" />
-                          <span className="font-medium text-gray-900">{route.to}</span>
-                        </div>
-                        <div className="text-emerald-600 font-bold">
-                          à partir de {route.price} XOF
-                        </div>
-                      </button>
-                    ))}
-                 </div>
-               </div>
-
-               {/* CTA Final */}
-               <div className="max-w-6xl mx-auto mt-20">
-                 <div className="bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 rounded-3xl p-8 md:p-12 text-center relative overflow-hidden">
-                   <div className="absolute inset-0 opacity-10">
-                     <div className="absolute top-0 left-0 w-40 h-40 bg-white rounded-full -translate-x-1/2 -translate-y-1/2"></div>
-                     <div className="absolute bottom-0 right-0 w-60 h-60 bg-white rounded-full translate-x-1/3 translate-y-1/3"></div>
-                   </div>
-                   <div className="relative z-10">
-                     <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
-                       Prêt à voyager ? 🚗
-                     </h2>
-                     <p className="text-emerald-100 mb-8 max-w-xl mx-auto">
-                       Rejoignez des milliers de Sénégalais qui voyagent malin. Publiez votre trajet ou trouvez un conducteur en quelques clics.
-                     </p>
-                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                       <button 
-                         onClick={() => setCurrentView('publish')}
-                         className="px-8 py-4 bg-white text-emerald-600 font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
-                       >
-                         <Icons.PlusCircle size={20} />
-                         Proposer un trajet
-                       </button>
-                       <button 
-                         onClick={() => setCurrentView('search')}
-                         className="px-8 py-4 bg-emerald-700/50 backdrop-blur-sm text-white font-bold rounded-xl border-2 border-white/20 hover:bg-emerald-700/70 transition-all flex items-center justify-center gap-2"
-                       >
-                         <Icons.Search size={20} />
-                         Rechercher un trajet
-                       </button>
-                     </div>
-                   </div>
-                 </div>
-               </div>
-
-               {/* FAQ Section */}
-               <div className="max-w-6xl mx-auto mt-20 px-4">
-                 <FAQSection />
-               </div>
-
-               {/* Stats rapides */}
-               <div className="max-w-6xl mx-auto mt-32 mb-12">
-                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-                   <div>
-                     <div className="text-3xl font-bold text-gray-900">🇸🇳</div>
-                     <div className="text-sm text-gray-500 mt-1">100% Sénégalais</div>
-                   </div>
-                   <div>
-                     <div className="text-3xl font-bold text-emerald-600">50K+</div>
-                     <div className="text-sm text-gray-500 mt-1">Trajets réalisés</div>
-                   </div>
-                   <div>
-                     <div className="text-3xl font-bold text-emerald-600">15K+</div>
-                     <div className="text-sm text-gray-500 mt-1">Membres actifs</div>
-                   </div>
-                   <div>
-                     <div className="text-3xl font-bold text-yellow-500">⭐ 4.8</div>
-                     <div className="text-sm text-gray-500 mt-1">Note moyenne</div>
-                   </div>
                  </div>
                </div>
             </div>
-          </>
+          <>
         );
       }
 
