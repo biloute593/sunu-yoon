@@ -5,7 +5,6 @@ import CookieBanner from './components/CookieBanner';
 import AuthModal from './components/AuthModal';
 import BookingModal from './components/BookingModal';
 import ChatWindow from './components/ChatWindow';
-import FAQSection from './components/FAQ';
 import { Icons } from './components/Icons';
 import LiveTrackingPanel from './components/LiveTrackingPanel';
 import RideRequest from './components/RideRequest';
@@ -1549,160 +1548,22 @@ function AppContent() {
   const renderContent = () => {
     switch (currentView) {
       case 'home': {
-        const highlightedDepartureDate = new Date(highlightedDriverRide.departureTime);
         return (
           <>
             <div className="bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white py-20 px-4 md:py-32 relative overflow-hidden">
                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                <div className="absolute bottom-0 left-0 w-48 h-48 bg-yellow-400/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
-               <div className="absolute top-1/2 left-1/4 w-32 h-32 bg-white/5 rounded-full blur-2xl animate-pulse"></div>
                
                <div className="max-w-6xl mx-auto relative z-10 text-center">
-                 <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium mb-6">
-                   <span className="relative flex h-2 w-2">
-                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                     <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-400"></span>
-                   </span>
-                   +500 trajets disponibles aujourd'hui
-                 </div>
                  <h1 className="text-4xl md:text-6xl font-extrabold mb-6 tracking-tight leading-tight">
-                   Votre voyage commence<br className="hidden md:block" /> <span className="text-yellow-300">ici.</span>
+                   Covoiturage Sénégal
                  </h1>
-                 <p className="text-xl md:text-2xl text-emerald-100 mb-8 max-w-2xl mx-auto">
-                   Rejoignez la plus grande communauté de covoiturage au Sénégal. Économique, convivial et sûr.
-                 </p>
-                 
-                 {/* Quick action buttons */}
-                 <div className="flex flex-wrap justify-center gap-4 mb-8">
-                   <button
-                     onClick={() => setShowRequestRide(true)}
-                     className="flex items-center gap-2 bg-yellow-400 text-gray-900 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-2xl transform hover:scale-110 active:scale-95 transition-all duration-200"
-                   >
-                     <Icons.Navigation size={20} />
-                     🚖 Course maintenant
-                   </button>
-                   <button
-                     onClick={() => setCurrentView('publish')}
-                     className="flex items-center gap-2 bg-white text-emerald-600 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-2xl transform hover:scale-110 active:scale-95 transition-all duration-200"
-                   >
-                     <Icons.PlusCircle size={20} />
-                     Proposer un trajet
-                   </button>
-                   <button
-                     onClick={() => document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' })}
-                     className="flex items-center gap-2 bg-emerald-700/50 backdrop-blur-sm text-white px-6 py-3 rounded-full font-bold border border-white/20 hover:bg-emerald-700/70 transform hover:scale-105 active:scale-95 transition-all duration-200"
-                   >
-                     <Icons.Search size={20} />
-                     Trouver un trajet
-                   </button>
-                 </div>
-                 
-                 {/* Stats */}
-                 <div className="flex justify-center gap-8 md:gap-16 mt-8 text-center">
-                   <div>
-                     <div className="text-3xl md:text-4xl font-bold text-white">15K+</div>
-                     <div className="text-emerald-200 text-sm">Utilisateurs</div>
-                   </div>
-                   <div>
-                     <div className="text-3xl md:text-4xl font-bold text-white">50K+</div>
-                     <div className="text-emerald-200 text-sm">Trajets réalisés</div>
-                   </div>
-                   <div>
-                     <div className="text-3xl md:text-4xl font-bold text-white">4.8</div>
-                     <div className="text-emerald-200 text-sm">⭐ Note moyenne</div>
-                   </div>
-                 </div>
                </div>
             </div>
-
-            <div className="relative z-20 px-4 mt-32 mb-12">
-              <div className="max-w-5xl mx-auto bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 md:p-8 flex flex-col lg:flex-row gap-6 items-center">
-                <div className="flex items-center gap-4 w-full lg:w-1/3">
-                  <div className="relative">
-                    <img
-                      src={highlightedDriverRide.driver.avatarUrl}
-                      alt={highlightedDriverRide.driver.name}
-                      className="w-20 h-20 rounded-2xl object-cover shadow-lg"
-                    />
-                    {highlightedDriverRide.driver.isVerified && (
-                      <span className="absolute -bottom-1 -right-1 bg-emerald-600 text-white rounded-full p-1 border-2 border-white">
-                        <Icons.CheckCircle size={14} />
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm uppercase tracking-[0.3em] text-gray-400">Conducteur à l'honneur</p>
-                    <h3 className="text-xl font-bold text-gray-900">{highlightedDriverRide.driver.name}</h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                      <Icons.Star size={16} className="text-yellow-400 fill-yellow-400" />
-                      <span className="font-semibold text-gray-900">{highlightedDriverRide.driver.rating}</span>
-                      <span className="text-gray-300">•</span>
-                      <span>{highlightedDriverRide.driver.reviewCount} avis</span>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-2">{highlightedDriverRide.carModel}</p>
-                  </div>
-                </div>
-
-                <div className="flex-1 grid sm:grid-cols-2 gap-6 w-full">
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Itinéraire</p>
-                      <p className="text-lg font-semibold text-gray-900">{highlightedDriverRide.origin}</p>
-                      <p className="text-sm text-emerald-600 flex items-center gap-2">
-                        <Icons.ChevronRight size={16} />
-                        {highlightedDriverRide.destination}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Départ</p>
-                      <p className="text-base font-semibold text-gray-900">
-                        {highlightedDepartureDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {highlightedDepartureDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                        <span className="text-gray-300 mx-1">•</span>
-                        {highlightedDriverRide.duration}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Ce trajet inclut</p>
-                    <div className="flex flex-wrap gap-2">
-                      {highlightedDriverRide.features.map(feature => (
-                        <span key={feature} className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">
-                          {feature}
-                        </span>
-                      ))}
-                    </div>
-                    <p className="text-sm text-gray-500 leading-relaxed">
-                      {highlightedDriverRide.description}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="w-full lg:w-48 space-y-3 text-center lg:text-right">
-                  <div>
-                    <p className="text-sm text-gray-500">Prix par place</p>
-                    <p className="text-3xl font-extrabold text-emerald-600">
-                      {highlightedDriverRide.price.toLocaleString('fr-FR')} {highlightedDriverRide.currency}
-                    </p>
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    {highlightedDriverRide.seatsAvailable} / {highlightedDriverRide.totalSeats} places restantes
-                  </p>
-                  <button
-                    onClick={() => handleRideClick(highlightedDriverRide)}
-                    className="w-full py-3 rounded-2xl font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-lg"
-                  >
-                    Rejoindre ce trajet
-                  </button>
-                </div>
-              </div>
-            </div>
             
-            <div className="px-4 pb-20">
+            <div className="px-4 pb-20 mt-8">
                {/* Actions rapides */}
-               <div className="max-w-4xl mx-auto mt-8 mb-6">
+               <div className="max-w-4xl mx-auto mb-8">
                  <div className="grid grid-cols-2 gap-4">
                    <button
                      onClick={() => setCurrentView('publish')}
@@ -1728,39 +1589,8 @@ function AppContent() {
                  onLocate={handleGeolocate} 
                  userLocation={userLocation}
                />
-
-               {/* Comment ça marche - Version simplifiée */}
-               <div className="max-w-4xl mx-auto mt-20 mb-20">
-                 <div className="text-center mb-12">
-                   <h2 className="text-2xl font-bold text-gray-900 mb-4">Comment ça marche ?</h2>
-                   <p className="text-gray-600 max-w-xl mx-auto">En 3 étapes simples</p>
-                 </div>
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div className="text-center">
-                       <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
-                         1
-                       </div>
-                       <h3 className="text-lg font-bold mb-2 text-gray-900">Recherchez</h3>
-                       <p className="text-gray-600 text-sm">Entrez votre itinéraire</p>
-                    </div>
-                    <div className="text-center">
-                       <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
-                         2
-                       </div>
-                       <h3 className="text-lg font-bold mb-2 text-gray-900">Réservez</h3>
-                       <p className="text-gray-600 text-sm">Contactez le conducteur</p>
-                    </div>
-                    <div className="text-center">
-                       <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
-                         3
-                       </div>
-                       <h3 className="text-lg font-bold mb-2 text-gray-900">Voyagez</h3>
-                       <p className="text-gray-600 text-sm">Partez ensemble</p>
-                    </div>
-                 </div>
-               </div>
             </div>
-          <>
+          </>
         );
       }
 
