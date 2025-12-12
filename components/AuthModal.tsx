@@ -63,9 +63,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, initi
         setStep('verify');
         setSuccess('Un code de vérification a été envoyé à votre téléphone.');
       } else {
-        onClose();
-        onSuccess?.();
-        resetForm();
+        setSuccess('✅ Connexion réussie !');
+        // Petit délai pour montrer le message de succès
+        setTimeout(() => {
+          onClose();
+          onSuccess?.();
+          resetForm();
+        }, 600);
       }
     } else {
       setError(result.error || 'Erreur de connexion');
@@ -109,9 +113,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, initi
     const result = await verifyCode(verificationPhone, verificationCode);
     
     if (result.success) {
-      onClose();
-      onSuccess?.();
-      resetForm();
+      setSuccess('✅ Vérification réussie ! Redirection en cours...');
+      // Petit délai pour montrer le message de succès
+      setTimeout(() => {
+        onClose();
+        onSuccess?.();
+        resetForm();
+      }, 800);
     } else {
       setError(result.error || 'Code invalide');
     }

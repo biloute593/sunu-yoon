@@ -2024,8 +2024,12 @@ function AppContent() {
         isOpen={showAuthModal} 
         onClose={() => setShowAuthModal(false)}
         onSuccess={() => {
+          // Fermer le modal
+          setShowAuthModal(false);
           // Rediriger vers le profil après connexion/inscription réussie
           setCurrentView('profile');
+          // Afficher un message de succès
+          console.log('✅ Connexion réussie - redirection vers profil');
         }}
       />
       

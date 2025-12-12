@@ -1,10 +1,22 @@
 import twilio from 'twilio';
 import { logger } from '../utils/logger';
 
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+// Initialiser Twilio seulement si les credentials sont fournis
+let client: any = null;
+
+if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+  try {
+    client = twilio(
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_AUTH_TOKEN
+    );
+    logger.info('✅ Twilio initialisé');
+  } catch (error) {
+    logger.warn('⚠️ Twilio non configuré - SMS désactivés');
+  }
+} else {
+  logger.warn('⚠️ Variables Twilio manquantes - SMS désactivés');
+}
 
 export interface SMSOptions {
   to: string;
@@ -13,6 +25,12 @@ export interface SMSOptions {
 
 export const sendSMS = async ({ to, message }: SMSOptions): Promise<boolean> => {
   try {
+    // Si Twilio n'est pas configuré, logger le code et simuler l'envoi
+    if (!client) {
+      logger.warn(`📱 MODE DÉVELOPPEMENT - Code SMS pour ${to}: ${message}`);
+      return true;
+    }
+
     // Formater le numéro pour le Sénégal si nécessaire
     let formattedNumber = to;
     if (!to.startsWith('+')) {
