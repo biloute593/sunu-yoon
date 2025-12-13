@@ -707,7 +707,7 @@ const PublishForm: React.FC<{
         localStorage.setItem('pendingRides', JSON.stringify(pendingRides));
         setPublishedSuccess(true);
       } else {
-        await rideService.createRide({
+        const created = await rideService.createRide({
           origin: formData.origin,
           destination: formData.destination,
           departureTime,
@@ -717,7 +717,7 @@ const PublishForm: React.FC<{
           description: formData.description,
           features: formData.features
         });
-        onPublish(formData);
+        onPublish({ ...formData, id: created?.id || `api_${Date.now()}` });
       }
     } catch (error) {
       console.error('Erreur création trajet:', error);
@@ -1489,7 +1489,7 @@ function AppContent() {
     try {
       // Créer un trajet à partir du draft
       const newRide: Ride = {
-        id: `local_${Date.now()}`,
+        id: (draft as any).id || `local_${Date.now()}`,
         driver: user ? {
           id: user.id,
           name: `${user.firstName} ${user.lastName || ''}`.trim(),
@@ -1521,19 +1521,27 @@ function AppContent() {
       // Ajouter le trajet au stock local
       setPublishedRides(prev => [newRide, ...prev]);
       
-      // Si on a une recherche active, l'ajouter aussi aux résultats
-      if (searchResults.length > 0 || searchParams) {
-        setSearchResults(prev => [newRide, ...prev]);
-      }
+      // Mettre à jour la recherche courante pour afficher immédiatement le trajet
+      const publishSearchParams: SearchParams = {
+        origin: draft.origin,
+        destination: draft.destination,
+        date: draft.date,
+        passengers: searchParams?.passengers || 1,
+        userLocation: userLocation.coords || undefined
+      };
+      setSearchParams(publishSearchParams);
+      setSearchResults(prev => [newRide, ...prev]);
+      setCurrentView('search');
 
       // Sauvegarder dans localStorage pour persistance
       const storedRides = JSON.parse(localStorage.getItem('publishedRides') || '[]');
       storedRides.push(newRide);
       localStorage.setItem('publishedRides', JSON.stringify(storedRides));
 
-      // Forcer le rechargement du profil
-      setProfileRefreshKey(prev => prev + 1);
-      setCurrentView('profile');
+      // Forcer le rechargement du profil si l'utilisateur est connecté
+      if (isAuthenticated) {
+        setProfileRefreshKey(prev => prev + 1);
+      }
     } catch (error) {
       console.error('Erreur lors de la publication:', error);
     }
@@ -1605,7 +1613,7 @@ function AppContent() {
               userLocation={userLocation}
             />
             
-            <div className="mt-32 mb-12">
+            <div className="mt-12 mb-12">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">
                   {isLoading ? 'Recherche en cours...' : `${searchResults.length} trajet${searchResults.length > 1 ? 's' : ''} disponible${searchResults.length > 1 ? 's' : ''}`}
