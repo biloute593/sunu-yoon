@@ -66,7 +66,8 @@ router.get('/',
               avatarUrl: true,
               rating: true,
               reviewCount: true,
-              isVerified: true
+              isVerified: true,
+              carModel: true
             }
           }
         },
@@ -91,7 +92,7 @@ router.get('/',
             currency: ride.currency,
             seatsAvailable: ride.availableSeats,
             totalSeats: ride.totalSeats,
-            carModel: ride.carModel || 'Véhicule',
+            carModel: ride.driver.carModel || 'Véhicule',
             features: ride.features,
             description: ride.description,
             status: ride.status,

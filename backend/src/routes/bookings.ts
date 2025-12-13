@@ -146,7 +146,6 @@ router.post('/',
 
 // ============ MES RÉSERVATIONS ============
 router.get('/my', 
-  authMiddleware,
   async (req: AuthRequest, res, next) => {
   try {
     const userId = req.user!.id;
