@@ -77,7 +77,7 @@ app.use('/api/guest-bookings', guestBookingRoutes);
 app.use('/api/payments', authMiddleware, paymentRoutes);
 app.use('/api/messages', authMiddleware, messageRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
-app.use('/api/tracking', trackingRoutes);
+app.use('/api/tracking', authMiddleware, trackingRoutes);
 
 // Webhooks (sans auth middleware)
 app.use('/webhooks/wave', express.raw({ type: 'application/json' }));

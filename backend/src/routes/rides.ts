@@ -7,9 +7,9 @@ import { AuthRequest, authMiddleware, optionalAuth } from '../middleware/auth';
 const router = Router();
 
 // ============ RECHERCHER DES TRAJETS (PUBLIC) ============
-router.get('/search',
-  query('origin').notEmpty().withMessage('Ville de départ requise'),
-  query('destination').notEmpty().withMessage('Ville de destination requise'),
+router.get('/',
+  query('origin').optional().trim(),
+  query('destination').optional().trim(),
   query('date').optional().isISO8601().withMessage('Date invalide'),
   query('seats').optional().isInt({ min: 1 }).withMessage('Nombre de places invalide'),
   async (req, res, next) => {
@@ -20,8 +20,8 @@ router.get('/search',
       }
 
       const { origin, destination, date, seats } = req.query as {
-        origin: string;
-        destination: string;
+        origin?: string;
+        destination?: string;
         date?: string;
         seats?: string;
       };
@@ -30,10 +30,16 @@ router.get('/search',
       // Construire la requête
       const whereClause: any = {
         status: 'OPEN',
-        availableSeats: { gte: minSeats },
-        originCity: { contains: origin as string, mode: 'insensitive' },
-        destinationCity: { contains: destination as string, mode: 'insensitive' }
+        availableSeats: { gte: minSeats }
       };
+
+      // Ajouter les filtres optionnels de ville
+      if (origin && origin.trim()) {
+        whereClause.originCity = { contains: origin.trim(), mode: 'insensitive' };
+      }
+      if (destination && destination.trim()) {
+        whereClause.destinationCity = { contains: destination.trim(), mode: 'insensitive' };
+      }
 
       // Filtrer par date si fournie
       if (date) {
@@ -80,13 +86,16 @@ router.get('/search',
             destinationAddress: ride.destinationAddress,
             departureTime: ride.departureTime.toISOString(),
             duration: `${Math.floor(ride.estimatedDuration / 60)}h ${ride.estimatedDuration % 60}m`,
+            estimatedDuration: ride.estimatedDuration,
             price: ride.pricePerSeat,
             currency: ride.currency,
             seatsAvailable: ride.availableSeats,
             totalSeats: ride.totalSeats,
-            carModel: ride.driver.name, // À remplacer par les infos véhicule
+            carModel: ride.carModel || 'Véhicule',
             features: ride.features,
-            description: ride.description
+            description: ride.description,
+            status: ride.status,
+            createdAt: ride.createdAt.toISOString()
           })),
           total: rides.length
         }
@@ -370,7 +379,7 @@ router.post('/:id/cancel',
 );
 
 // ============ MES TRAJETS (CONDUCTEUR) ============
-router.get('/my/published',
+router.get('/my-rides',
   authMiddleware,
   async (req: AuthRequest, res, next) => {
     try {

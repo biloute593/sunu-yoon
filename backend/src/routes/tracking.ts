@@ -1,7 +1,7 @@
-import { Router, Request } from 'express';
+import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { AppError } from '../middleware/errorHandler';
-import { Response, NextFunction } from 'express';
+import { AuthRequest } from '../middleware/auth';
 import {
   clearTrackingPoint,
   getTrackingPoint,
@@ -15,13 +15,6 @@ const validateRideParam = [
   param('rideId').isString().trim().notEmpty().withMessage('Identifiant de trajet requis')
 ];
 
-const ensureValid = (req: Request) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    throw new AppError(errors.array()[0].msg, 400);
-  }
-};
-
 router.post(
   '/:rideId',
   validateRideParam,
@@ -29,7 +22,7 @@ router.post(
   body('lng').isFloat({ min: -180, max: 180 }).withMessage('Longitude invalide'),
   body('speed').optional().isFloat({ min: 0, max: 200 }).withMessage('Vitesse invalide'),
   body('heading').optional().isFloat({ min: 0, max: 360 }).withMessage('Orientation invalide'),
-  (req: Request, res: Response, next: NextFunction) => {
+  (req: AuthRequest, res, next) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -52,7 +45,7 @@ router.post(
   }
 );
 
-router.get('/:rideId', validateRideParam, (req: Request, res: Response, next: NextFunction) => {
+router.get('/:rideId', validateRideParam, (req: AuthRequest, res, next) => {
   try {
     ensureValid(req);
     const { rideId } = req.params;
@@ -68,7 +61,7 @@ router.get('/:rideId', validateRideParam, (req: Request, res: Response, next: Ne
   }
 });
 
-router.get('/:rideId/stream', validateRideParam, (req: Request, res: Response, next: NextFunction) => {
+router.get('/:rideId/stream', validateRideParam, (req: AuthRequest, res, next) => {
   try {
     ensureValid(req);
     const { rideId } = req.params;
@@ -78,7 +71,7 @@ router.get('/:rideId/stream', validateRideParam, (req: Request, res: Response, n
   }
 });
 
-router.delete('/:rideId', validateRideParam, (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:rideId', validateRideParam, (req: AuthRequest, res, next) => {
   try {
     ensureValid(req);
     const { rideId } = req.params;
