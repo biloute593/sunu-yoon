@@ -32,13 +32,14 @@ services:
       - key: PORT
         value: 3001
 
-  - type: static_site
+  - type: web
     name: sunu-yoon-frontend
     runtime: node
     region: frankfurt
     plan: free
     buildCommand: npm install && npm run build
-    staticPublishPath: dist
+    startCommand: npm run preview
+    publishPath: dist
     envVars:
       - key: VITE_API_URL
         value: https://sunu-yoon-backend.onrender.com/api
