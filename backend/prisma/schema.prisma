@@ -133,6 +133,47 @@ enum RideStatus {
   CANCELLED   // Trajet annulé
 }
 
+// ==================== TRAJETS INVITÉS ====================
+
+model GuestRide {
+  id               String           @id @default(uuid())
+  driverName       String
+  driverPhone      String
+
+  originCity       String
+  originAddress    String?
+  destinationCity  String
+  destinationAddress String?
+
+  departureTime    DateTime
+  estimatedDuration Int            @default(180)
+  distance         Float?
+
+  pricePerSeat     Int
+  currency         String          @default("XOF")
+  totalSeats       Int
+  availableSeats   Int
+
+  carModel         String?
+  description      String?
+  features         String[]        @default([])
+
+  status           GuestRideStatus @default(PUBLISHED)
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([originCity, destinationCity])
+  @@index([departureTime])
+  @@index([status])
+}
+
+enum GuestRideStatus {
+  PENDING
+  PUBLISHED
+  ARCHIVED
+}
+
 // ==================== RÉSERVATIONS ====================
 
 model Booking {

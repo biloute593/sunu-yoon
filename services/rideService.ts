@@ -1,52 +1,80 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-interface CachedResult {
-  data: any;
+interface CachedResult<T> {
+  data: T;
   timestamp: number;
 }
 
-const searchCache = new Map<string, CachedResult>();
-const CACHE_DURATION_MS = 2 * 60 * 1000; // 2 minutes
+const searchCache = new Map<string, CachedResult<Ride[]>>();
+const CACHE_DURATION_MS = 2 * 60 * 1000;
 
-const getCacheKey = (origin: string, destination: string, date: string): string => {
-  return `${origin}|${destination}|${date}`;
+const getCacheKey = (origin?: string, destination?: string, date?: string, seats?: number): string => {
+  return [origin || '', destination || '', date || '', seats ?? ''].join('|');
 };
 
-const getCachedResult = (key: string): any | null => {
+const getCachedResult = (key: string): Ride[] | null => {
   const cached = searchCache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION_MS) {
-    return cached.data;
+  if (!cached) {
+    return null;
   }
-  searchCache.delete(key);
-  return null;
+  if (Date.now() - cached.timestamp > CACHE_DURATION_MS) {
+    searchCache.delete(key);
+    return null;
+  }
+  return cached.data;
 };
+
+const saveCachedResult = (key: string, data: Ride[]) => {
+  searchCache.set(key, { data, timestamp: Date.now() });
+};
+
+type RideType = 'registered' | 'guest';
 
 export interface RideDriver {
   id: string;
   firstName: string;
   lastName?: string;
+  name?: string;
   avatarUrl?: string;
-  rating?: number;
+  rating?: number | null;
   reviewCount?: number;
   isVerified?: boolean;
+  isGuest?: boolean;
+  phone?: string;
+}
+
+export interface RideContact {
+  phone: string;
+  whatsappUrl: string;
+  callUrl: string;
 }
 
 export interface Ride {
   id: string;
+  type: RideType;
+  isGuest: boolean;
   driver: RideDriver;
+  driverContact: RideContact | null;
   origin: string;
+  originAddress?: string | null;
   destination: string;
+  destinationAddress?: string | null;
   departureTime: string;
+  duration: string;
+  estimatedDuration?: number | null;
   price: number;
   currency: string;
   seatsAvailable: number;
   totalSeats: number;
-  carModel?: string;
-  description?: string;
+  carModel?: string | null;
+  description?: string | null;
   features: string[];
-  estimatedDuration?: string;
   status: string;
   createdAt: string;
+  distance?: number | null;
+  originCoords?: { lat: number; lng: number } | null;
+  destinationCoords?: { lat: number; lng: number } | null;
+  passengers?: Array<{ id: string; name: string; avatarUrl?: string; seats: number }>;
 }
 
 export interface RideSearchParams {
@@ -57,31 +85,67 @@ export interface RideSearchParams {
 }
 
 export interface CreateRideData {
-  origin: string;
-  destination: string;
+  originCity: string;
+  originAddress?: string;
+  destinationCity: string;
+  destinationAddress?: string;
   departureTime: string;
-  price: number;
-  seatsAvailable: number;
+  estimatedDuration?: number;
+  distance?: number;
+  pricePerSeat: number;
+  totalSeats: number;
+  features?: string[];
+  description?: string;
+  carModel?: string;
+}
+
+export interface CreateGuestRideData {
+  driverName: string;
+  driverPhone: string;
+  originCity: string;
+  originAddress?: string;
+  destinationCity: string;
+  destinationAddress?: string;
+  departureTime: string;
+  estimatedDuration?: number;
+  pricePerSeat: number;
+  availableSeats?: number;
+  totalSeats?: number;
   carModel?: string;
   description?: string;
   features?: string[];
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
+
 class RideService {
   private getToken(): string | null {
-    return localStorage.getItem('sunu_yoon_token');
+    try {
+      return localStorage.getItem('sunu_yoon_token');
+    } catch {
+      return null;
+    }
   }
 
   private getAuthHeaders(): HeadersInit {
     const token = this.getToken();
     return {
       'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
     };
   }
 
-  // Rechercher des trajets
-  async searchRides(params: RideSearchParams): Promise<Ride[]> {
+  async searchRides(params: RideSearchParams = {}): Promise<Ride[]> {
+    const cacheKey = getCacheKey(params.origin, params.destination, params.date, params.seats);
+    const cached = getCachedResult(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     try {
       const queryParams = new URLSearchParams();
       if (params.origin) queryParams.append('origin', params.origin);
@@ -90,8 +154,7 @@ class RideService {
       if (params.seats) queryParams.append('seats', params.seats.toString());
 
       const response = await fetch(`${API_URL}/rides?${queryParams.toString()}`, {
-        method: 'GET',
-        headers: this.getAuthHeaders()
+        method: 'GET'
       });
 
       if (!response.ok) {
@@ -99,33 +162,34 @@ class RideService {
         return [];
       }
 
-      const data = await response.json();
-      return data.rides || data || [];
+      const payload: ApiResponse<{ rides: Ride[]; total: number }> = await response.json();
+      const rides = Array.isArray(payload?.data?.rides) ? payload.data.rides : [];
+      saveCachedResult(cacheKey, rides);
+      return rides;
     } catch (error) {
       console.error('Search rides error:', error);
-      // Retourner des données de démonstration si l'API n'est pas disponible
-      return this.getMockRides(params);
+      return [];
     }
   }
 
-  // Récupérer un trajet par ID
   async getRide(id: string): Promise<Ride | null> {
     try {
       const response = await fetch(`${API_URL}/rides/${id}`, {
-        method: 'GET',
-        headers: this.getAuthHeaders()
+        method: 'GET'
       });
 
-      if (!response.ok) return null;
+      if (!response.ok) {
+        return null;
+      }
 
-      return await response.json();
+      const payload: ApiResponse<{ ride: Ride; userBooking: { id: string; seats: number } | null }> = await response.json();
+      return payload?.data?.ride ?? null;
     } catch (error) {
       console.error('Get ride error:', error);
       return null;
     }
   }
 
-  // Créer un trajet
   async createRide(data: CreateRideData): Promise<Ride> {
     const response = await fetch(`${API_URL}/rides`, {
       method: 'POST',
@@ -134,14 +198,39 @@ class RideService {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Erreur lors de la création du trajet');
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.message || 'Erreur lors de la création du trajet');
     }
 
-    return await response.json();
+    const payload: ApiResponse<{ ride: Ride }> = await response.json();
+    searchCache.clear();
+    if (!payload?.data?.ride) {
+      throw new Error('Réponse invalide du serveur.');
+    }
+    return payload.data.ride;
   }
 
-  // Récupérer mes trajets publiés
+  async createGuestRide(data: CreateGuestRideData): Promise<Ride> {
+    const response = await fetch(`${API_URL}/rides/guest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.message || 'Erreur lors de la publication du trajet');
+    }
+
+    const payload: ApiResponse<{ ride: Ride }> = await response.json();
+    // Invalider le cache car un nouveau trajet vient d'être publié
+    searchCache.clear();
+    if (!payload?.data?.ride) {
+      throw new Error('Réponse invalide du serveur.');
+    }
+    return payload.data.ride;
+  }
+
   async getMyRides(): Promise<Ride[]> {
     try {
       const response = await fetch(`${API_URL}/rides/my-rides`, {
@@ -153,22 +242,23 @@ class RideService {
         return [];
       }
 
-      const data = await response.json();
-      return data.rides || data || [];
+      const payload: ApiResponse<{ rides: Ride[] }> = await response.json();
+      return Array.isArray(payload?.data?.rides) ? payload.data.rides : [];
     } catch (error) {
       console.error('Get my rides error:', error);
       return [];
     }
   }
 
-  // Annuler un trajet
   async cancelRide(id: string): Promise<boolean> {
     try {
       const response = await fetch(`${API_URL}/rides/${id}/cancel`, {
         method: 'POST',
         headers: this.getAuthHeaders()
       });
-
+      if (response.ok) {
+        searchCache.clear();
+      }
       return response.ok;
     } catch (error) {
       console.error('Cancel ride error:', error);
@@ -176,7 +266,6 @@ class RideService {
     }
   }
 
-  // Réserver un trajet
   async bookRide(rideId: string, seats: number = 1): Promise<{ bookingId: string }> {
     const response = await fetch(`${API_URL}/bookings`, {
       method: 'POST',
@@ -185,94 +274,12 @@ class RideService {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Erreur lors de la réservation');
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.message || 'Erreur lors de la réservation');
     }
 
-    return await response.json();
-  }
-
-  // Données de démonstration si l'API n'est pas disponible
-  private getMockRides(params: RideSearchParams): Ride[] {
-    const mockRides: Ride[] = [
-      {
-        id: 'demo-1',
-        driver: {
-          id: 'driver-1',
-          firstName: 'Amadou',
-          lastName: 'Diallo',
-          avatarUrl: 'https://ui-avatars.com/api/?name=Amadou+Diallo&background=10b981&color=fff',
-          rating: 4.8,
-          reviewCount: 45,
-          isVerified: true
-        },
-        origin: params.origin || 'Dakar',
-        destination: params.destination || 'Saint-Louis',
-        departureTime: new Date(Date.now() + 3600000 * 3).toISOString(),
-        price: 3500,
-        currency: 'XOF',
-        seatsAvailable: 3,
-        totalSeats: 4,
-        carModel: 'Toyota Corolla',
-        description: 'Voyage confortable avec climatisation',
-        features: ['Climatisation', 'Musique', 'Bagages acceptés'],
-        estimatedDuration: '3h30',
-        status: 'active',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'demo-2',
-        driver: {
-          id: 'driver-2',
-          firstName: 'Fatou',
-          lastName: 'Sow',
-          avatarUrl: 'https://ui-avatars.com/api/?name=Fatou+Sow&background=3b82f6&color=fff',
-          rating: 4.9,
-          reviewCount: 78,
-          isVerified: true
-        },
-        origin: params.origin || 'Dakar',
-        destination: params.destination || 'Thiès',
-        departureTime: new Date(Date.now() + 3600000 * 5).toISOString(),
-        price: 2000,
-        currency: 'XOF',
-        seatsAvailable: 2,
-        totalSeats: 4,
-        carModel: 'Peugeot 308',
-        description: 'Trajet direct sans arrêt',
-        features: ['Climatisation', 'Non-fumeur'],
-        estimatedDuration: '1h15',
-        status: 'active',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'demo-3',
-        driver: {
-          id: 'driver-3',
-          firstName: 'Moussa',
-          lastName: 'Ndiaye',
-          avatarUrl: 'https://ui-avatars.com/api/?name=Moussa+Ndiaye&background=f59e0b&color=fff',
-          rating: 4.6,
-          reviewCount: 32,
-          isVerified: false
-        },
-        origin: params.origin || 'Dakar',
-        destination: params.destination || 'Touba',
-        departureTime: new Date(Date.now() + 3600000 * 8).toISOString(),
-        price: 4000,
-        currency: 'XOF',
-        seatsAvailable: 4,
-        totalSeats: 5,
-        carModel: 'Renault Duster',
-        description: 'Véhicule spacieux pour vos bagages',
-        features: ['Climatisation', 'Bagages acceptés', 'Animaux acceptés'],
-        estimatedDuration: '4h00',
-        status: 'active',
-        createdAt: new Date().toISOString()
-      }
-    ];
-
-    return mockRides;
+    searchCache.clear();
+    return response.json();
   }
 }
 

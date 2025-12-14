@@ -14,20 +14,29 @@ import { locationService } from './services/locationService';
 import { Coordinates, LocationState, DraftRide } from './types';
 
 // Types adaptés pour le frontend
-interface User {
+interface Driver {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   avatarUrl: string;
   rating: number;
   reviewCount: number;
   isVerified: boolean;
+  isGuest?: boolean;
+  phone?: string;
 }
 
 interface Ride {
   id: string;
-  driver: User;
+  type: 'registered' | 'guest';
+  isGuest: boolean;
+  driver: Driver;
+  driverContact: ApiRide['driverContact'] | null;
   origin: string;
+  originAddress?: string;
   destination: string;
+  destinationAddress?: string;
   departureTime: string;
   price: number;
   currency: string;
@@ -37,6 +46,9 @@ interface Ride {
   description?: string;
   features: string[];
   duration: string;
+  estimatedDuration?: number | null;
+  status?: string;
+  createdAt?: string;
 }
 
 interface SearchParams {
@@ -48,28 +60,78 @@ interface SearchParams {
 }
 
 // Convertir les données de l'API vers le format frontend
+const computeDurationLabel = (rawDuration?: string, estimatedMinutes?: number | null): string => {
+  if (rawDuration && rawDuration.trim().length > 0) {
+    return rawDuration;
+  }
+  if (!estimatedMinutes || estimatedMinutes <= 0) {
+    return '~3h';
+  }
+  const hours = Math.floor(estimatedMinutes / 60);
+  const minutes = estimatedMinutes % 60;
+  if (minutes === 0) {
+    return `${hours}h`;
+  }
+  return `${hours}h ${minutes}m`;
+};
+
+const parseDurationToMinutes = (label?: string): number | null => {
+  if (!label) {
+    return null;
+  }
+  const match = label.match(/(?:(\d+)h)?\s*(?:(\d+)m)?/i);
+  if (!match) {
+    return null;
+  }
+  const hours = match[1] ? parseInt(match[1], 10) : 0;
+  const minutes = match[2] ? parseInt(match[2], 10) : 0;
+  const total = hours * 60 + minutes;
+  return total > 0 ? total : null;
+};
+
 const mapApiRideToRide = (apiRide: ApiRide): Ride => {
+  const type: 'registered' | 'guest' = apiRide.type || (apiRide.isGuest ? 'guest' : 'registered');
+  const driver = apiRide.driver;
+  const fallbackName = driver.name || `${driver.firstName || ''} ${driver.lastName || ''}`.trim() || 'Conducteur';
+  const [derivedFirstName, ...restName] = fallbackName.split(' ');
+  const derivedLastName = restName.join(' ');
+  const avatarUrl = driver.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&background=10b981&color=fff`;
+  const rating = typeof driver.rating === 'number' && driver.rating > 0 ? driver.rating : (type === 'guest' ? 4.7 : 4.8);
+  const reviewCount = typeof driver.reviewCount === 'number' ? driver.reviewCount : 0;
+
   return {
     id: apiRide.id,
+    type,
+    isGuest: type === 'guest' || !!apiRide.isGuest,
     driver: {
-      id: apiRide.driver.id,
-      name: `${apiRide.driver.firstName} ${apiRide.driver.lastName || ''}`.trim(),
-      avatarUrl: apiRide.driver.avatarUrl || `https://ui-avatars.com/api/?name=${apiRide.driver.firstName}&background=10b981&color=fff`,
-      rating: apiRide.driver.rating || 4.5,
-      reviewCount: apiRide.driver.reviewCount || 0,
-      isVerified: apiRide.driver.isVerified || false
+      id: driver.id,
+      name: fallbackName,
+      firstName: driver.firstName || derivedFirstName,
+      lastName: driver.lastName || derivedLastName,
+      avatarUrl,
+      rating,
+      reviewCount,
+      isVerified: driver.isVerified ?? false,
+      isGuest: type === 'guest' || !!apiRide.isGuest,
+      phone: driver.phone
     },
+    driverContact: apiRide.driverContact || null,
     origin: apiRide.origin,
+    originAddress: apiRide.originAddress || undefined,
     destination: apiRide.destination,
+    destinationAddress: apiRide.destinationAddress || undefined,
     departureTime: apiRide.departureTime,
     price: apiRide.price,
     currency: apiRide.currency || 'XOF',
     seatsAvailable: apiRide.seatsAvailable,
     totalSeats: apiRide.totalSeats,
     carModel: apiRide.carModel || 'Véhicule',
-    description: apiRide.description,
+    description: apiRide.description || undefined,
     features: apiRide.features || [],
-    duration: apiRide.estimatedDuration || '~3h'
+    duration: computeDurationLabel(apiRide.duration, apiRide.estimatedDuration),
+    estimatedDuration: apiRide.estimatedDuration ?? null,
+    status: apiRide.status,
+    createdAt: apiRide.createdAt
   };
 };
 
@@ -82,6 +144,17 @@ const SENEGAL_CITIES = [
   'Louga', 'Matam', 'Kédougou', 'Sédhiou', 'Pikine', 'Guédiawaye',
   'Saly', 'Somone', 'Joal-Fadiouth', 'Richard Toll', 'Podor', 'Vélingara',
   'Bignona', 'Oussouye', 'Cap Skirring', 'Kafountine', 'Palmarin'
+];
+
+const FEATURE_OPTIONS = [
+  'Climatisation',
+  'Bagages acceptés',
+  'Non-fumeur',
+  'Musique',
+  'WiFi',
+  'Prise USB',
+  'Animaux acceptés',
+  'Silence préféré'
 ];
 
 // Composant d'autocomplétion pour les villes
@@ -321,7 +394,10 @@ const SearchForm: React.FC<{
 const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick }) => {
   const departureDate = new Date(ride.departureTime);
   const timeString = departureDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  const dateString = departureDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  const isGuestRide = ride.isGuest;
+  const driverRating = typeof ride.driver.rating === 'number' ? ride.driver.rating : null;
+  const ratingLabel = isGuestRide ? 'Nouveau' : driverRating ? driverRating.toFixed(1) : 'N/A';
+  const reviewLabel = isGuestRide ? 'Invité' : `(${ride.driver.reviewCount})`;
 
   return (
     <div 
@@ -353,6 +429,11 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
             {ride.price.toLocaleString('fr-FR')}
           </span>
           <span className="text-xs text-gray-400">{ride.currency}</span>
+          {isGuestRide && (
+            <span className="block mt-2 text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
+              Annonce invitée
+            </span>
+          )}
         </div>
       </div>
 
@@ -385,8 +466,8 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
             <h4 className="text-sm font-semibold text-gray-900">{ride.driver.name}</h4>
             <div className="flex items-center gap-1 text-xs text-gray-500">
               <Icons.Star size={12} className="text-yellow-400 fill-yellow-400" />
-              <span className="font-medium text-gray-700">{ride.driver.rating}</span>
-              <span className="text-gray-400">({ride.driver.reviewCount})</span>
+              <span className="font-medium text-gray-700">{ratingLabel}</span>
+              <span className="text-gray-400">{reviewLabel}</span>
             </div>
           </div>
         </div>
@@ -412,12 +493,24 @@ const RideDetails: React.FC<{
   const departureDate = new Date(ride.departureTime);
   const formattedDate = departureDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const formattedTime = departureDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  
-  // Calcul heure d'arrivée estimée
-  const durationMatch = ride.duration?.match(/(\d+)/);
-  const durationMinutes = durationMatch ? parseInt(durationMatch[1]) * 60 : 120;
-  const arrivalDate = new Date(departureDate.getTime() + durationMinutes * 60000);
+  const effectiveDurationMinutes = ride.estimatedDuration && ride.estimatedDuration > 0
+    ? ride.estimatedDuration
+    : parseDurationToMinutes(ride.duration) ?? 180;
+  const arrivalDate = new Date(departureDate.getTime() + effectiveDurationMinutes * 60000);
   const arrivalTime = arrivalDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const isGuestRide = ride.isGuest;
+  const contact = ride.driverContact;
+  const driverRating = typeof ride.driver.rating === 'number' ? ride.driver.rating : null;
+  const ratingDisplay = isGuestRide
+    ? 'Nouveau'
+    : driverRating
+      ? `${driverRating.toFixed(1)}/5`
+      : 'N/A';
+  const reviewLabel = !isGuestRide && ride.driver.reviewCount > 0
+    ? `${ride.driver.reviewCount} avis`
+    : isGuestRide
+      ? 'Annonce invitée'
+      : 'Aucun avis';
 
   const featureEmojis: { [key: string]: string } = {
     'Climatisation': '❄️',
@@ -509,7 +602,7 @@ const RideDetails: React.FC<{
           <div>
             <Icons.Star className="mx-auto text-yellow-400 fill-yellow-400 mb-1" size={20} />
             <div className="text-sm text-gray-500">Note</div>
-            <div className="font-bold text-gray-900">{ride.driver.rating}/5</div>
+            <div className="font-bold text-gray-900">{ratingDisplay}</div>
           </div>
         </div>
       </div>
@@ -534,25 +627,52 @@ const RideDetails: React.FC<{
               <h4 className="text-xl font-bold text-gray-900">{ride.driver.name}</h4>
               <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
                 <Icons.Star size={16} className="text-yellow-400 fill-yellow-400" />
-                <span className="font-medium">{ride.driver.rating}/5</span>
+                <span className="font-medium">{ratingDisplay}</span>
                 <span className="text-gray-300">•</span>
-                <span>{ride.driver.reviewCount} avis</span>
+                <span>{reviewLabel}</span>
               </div>
-              {ride.driver.isVerified && (
+              {ride.driver.isVerified && !isGuestRide && (
                 <div className="flex items-center gap-1 text-sm text-emerald-600 mt-2 font-medium">
                   <Icons.Shield size={14} />
                   Profil vérifié
                 </div>
               )}
+              {isGuestRide && (
+                <div className="flex items-center gap-1 text-sm text-amber-600 mt-2 font-medium">
+                  <Icons.Info size={14} />
+                  Publication invitée
+                </div>
+              )}
             </div>
           </div>
-          <button 
-            onClick={onChat}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-emerald-100 rounded-xl transition-colors group"
-          >
-            <Icons.MessageCircle className="text-gray-600 group-hover:text-emerald-600" size={20} />
-            <span className="text-sm font-medium text-gray-700 group-hover:text-emerald-700 hidden sm:inline">Contacter</span>
-          </button>
+          {isGuestRide && contact ? (
+            <div className="flex flex-col sm:flex-row gap-3">
+              <a
+                href={contact.whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium transition-colors"
+              >
+                <Icons.MessageCircle size={18} className="text-white" />
+                WhatsApp
+              </a>
+              <a
+                href={contact.callUrl}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 hover:bg-emerald-100 text-gray-700 hover:text-emerald-700 rounded-xl font-medium transition-colors"
+              >
+                <Icons.Phone size={18} />
+                Appeler
+              </a>
+            </div>
+          ) : (
+            <button 
+              onClick={onChat}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-emerald-100 rounded-xl transition-colors group"
+            >
+              <Icons.MessageCircle className="text-gray-600 group-hover:text-emerald-600" size={20} />
+              <span className="text-sm font-medium text-gray-700 group-hover:text-emerald-700 hidden sm:inline">Contacter</span>
+            </button>
+          )}
         </div>
         
         {ride.description && (
@@ -584,19 +704,46 @@ const RideDetails: React.FC<{
 
       {/* Bouton de réservation */}
       <div className="sticky bottom-4 bg-white/95 backdrop-blur-sm p-4 -mx-4 rounded-2xl shadow-lg border border-gray-100">
-        <button 
-          onClick={onBook}
-          className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-bold rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all text-lg flex items-center justify-center gap-2"
-        >
-          <Icons.CheckCircle size={20} />
-          Réserver pour {ride.price.toLocaleString('fr-FR')} {ride.currency}
-        </button>
-        <p className="text-center text-xs text-gray-400 mt-3 flex items-center justify-center gap-2">
-          <Icons.Shield size={12} />
-          Paiement sécurisé via Orange Money ou Wave
-          <span className="text-gray-300">•</span>
-          Annulation gratuite
-        </p>
+        {isGuestRide && contact ? (
+          <div className="space-y-3">
+            <a
+              href={contact.whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all text-lg flex items-center justify-center gap-2"
+            >
+              <Icons.MessageCircle size={20} />
+              Discuter sur WhatsApp
+            </a>
+            <a
+              href={contact.callUrl}
+              className="w-full py-4 bg-gray-100 hover:bg-emerald-100 text-gray-700 hover:text-emerald-700 font-bold rounded-xl transition-colors text-lg flex items-center justify-center gap-2"
+            >
+              <Icons.Phone size={20} />
+              Appeler le conducteur
+            </a>
+            <p className="text-center text-xs text-gray-400 flex items-center justify-center gap-2">
+              <Icons.Info size={12} />
+              Les trajets invités se réservent directement avec le conducteur.
+            </p>
+          </div>
+        ) : (
+          <>
+            <button 
+              onClick={onBook}
+              className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-bold rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all text-lg flex items-center justify-center gap-2"
+            >
+              <Icons.CheckCircle size={20} />
+              Réserver pour {ride.price.toLocaleString('fr-FR')} {ride.currency}
+            </button>
+            <p className="text-center text-xs text-gray-400 mt-3 flex items-center justify-center gap-2">
+              <Icons.Shield size={12} />
+              Paiement sécurisé via Orange Money ou Wave
+              <span className="text-gray-300">•</span>
+              Annulation gratuite
+            </p>
+          </>
+        )}
       </div>
     </div>
   );
@@ -663,14 +810,19 @@ const PublishCityInput: React.FC<{
   );
 };
 
-const PublishForm: React.FC<{ 
-  onPublish: (ride: DraftRide) => void, 
-  onCancel: () => void,
-  isAuthenticated?: boolean
-}> = ({ onPublish, onCancel, isAuthenticated = false }) => {
+const PublishForm: React.FC<{
+  onPublish: (ride: ApiRide) => void;
+  onCancel: () => void;
+  mode: 'guest' | 'registered';
+  defaultDriverName?: string;
+  defaultDriverPhone?: string;
+}> = ({ onPublish, onCancel, mode, defaultDriverName = '', defaultDriverPhone = '' }) => {
+  const isGuestMode = mode === 'guest';
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [publishedSuccess, setPublishedSuccess] = useState(false);
-  const [formData, setFormData] = useState<DraftRide & { driverName?: string; driverPhone?: string }>({
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [driverName, setDriverName] = useState(defaultDriverName);
+  const [driverPhone, setDriverPhone] = useState(defaultDriverPhone);
+  const [formData, setFormData] = useState<DraftRide>({
     origin: '',
     destination: '',
     date: new Date().toISOString().split('T')[0],
@@ -679,151 +831,126 @@ const PublishForm: React.FC<{
     seats: 3,
     carModel: '',
     description: '',
-    features: ['Climatisation'],
-    driverName: '',
-    driverPhone: ''
+    features: ['Climatisation']
   });
 
-  const handleChange = (field: keyof (DraftRide & { driverName?: string; driverPhone?: string }), value: any) => {
+  const minDate = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const previewDate = useMemo(() => {
+    if (!formData.date || !formData.time) {
+      return null;
+    }
+    const parsed = new Date(`${formData.date}T${formData.time}`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }, [formData.date, formData.time]);
+
+  useEffect(() => {
+    setDriverName(defaultDriverName || '');
+  }, [defaultDriverName]);
+
+  useEffect(() => {
+    setDriverPhone(defaultDriverPhone || '');
+  }, [defaultDriverPhone]);
+
+  useEffect(() => {
+    setErrorMessage(null);
+  }, [formData.origin, formData.destination, formData.date, formData.time, formData.price, formData.seats, driverName, driverPhone, isGuestMode]);
+
+  const handleChange = (field: keyof DraftRide, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const isFormValid = useMemo(() => {
+    const baseValid =
+      formData.origin.trim().length > 0 &&
+      formData.destination.trim().length > 0 &&
+      formData.date &&
+      formData.time &&
+      formData.price >= 500 &&
+      formData.seats >= 1;
+    if (!baseValid) {
+      return false;
+    }
+    if (isGuestMode) {
+      return driverName.trim().length >= 2 && driverPhone.trim().length >= 8;
+    }
+    return true;
+  }, [formData, driverName, driverPhone, isGuestMode]);
+
+  const buildDepartureIso = (): string => {
+    const departure = new Date(`${formData.date}T${formData.time}`);
+    if (Number.isNaN(departure.getTime())) {
+      throw new Error('Date ou heure invalide');
+    }
+    if (departure.getTime() < Date.now()) {
+      throw new Error('La date de départ doit être dans le futur');
+    }
+    return departure.toISOString();
+  };
+
+  const normalizedFeatures = useMemo(() => {
+    return formData.features.filter((feature, index, array) => array.indexOf(feature) === index);
+  }, [formData.features]);
+
   const handleSubmit = async () => {
+    if (!isFormValid) {
+      setErrorMessage('Merci de compléter tous les champs obligatoires.');
+      return;
+    }
+
+    setErrorMessage(null);
     setIsSubmitting(true);
+
     try {
-      // Appeler l'API pour créer le trajet
-      const departureTime = `${formData.date}T${formData.time}:00`;
-      
-      // Si l'utilisateur n'est pas connecté, on stocke localement et on affiche un message de succès
-      if (!isAuthenticated) {
-        // Construire une annonce locale persistée
-        const contactLine = formData.driverName && formData.driverPhone
-          ? `\nContact: ${formData.driverName} (${formData.driverPhone})`
-          : '';
+      const departureTime = buildDepartureIso();
+      const basePayload = {
+        originCity: formData.origin.trim(),
+        originAddress: formData.origin.trim(),
+        destinationCity: formData.destination.trim(),
+        destinationAddress: formData.destination.trim(),
+        departureTime,
+        estimatedDuration: 180,
+        features: normalizedFeatures,
+        description: formData.description.trim() ? formData.description.trim() : undefined,
+        carModel: formData.carModel.trim() ? formData.carModel.trim() : undefined
+      };
 
-        const localDraft: DraftRide = {
-          origin: formData.origin,
-          destination: formData.destination,
-          date: formData.date,
-          time: formData.time,
-          price: formData.price,
-          seats: formData.seats,
-          carModel: formData.carModel,
-          description: `${formData.description || ''}${contactLine}`.trim(),
-          features: formData.features
-        };
+      let createdRide: ApiRide;
 
-        onPublish(localDraft);
-        setPublishedSuccess(true);
-      } else {
-        const created = await rideService.createRide({
-          origin: formData.origin,
-          destination: formData.destination,
-          departureTime,
-          price: formData.price,
-          seatsAvailable: formData.seats,
-          carModel: formData.carModel,
-          description: formData.description,
-          features: formData.features
+      if (isGuestMode) {
+        createdRide = await rideService.createGuestRide({
+          ...basePayload,
+          driverName: driverName.trim(),
+          driverPhone: driverPhone.trim(),
+          pricePerSeat: formData.price,
+          availableSeats: formData.seats,
+          totalSeats: formData.seats
         });
-        onPublish({ ...formData, id: created?.id || `api_${Date.now()}` });
-      }
-    } catch (error) {
-      console.error('Erreur création trajet:', error);
-      // Même en cas d'erreur API, on affiche le succès pour les non-connectés
-      if (!isAuthenticated) {
-        setPublishedSuccess(true);
       } else {
-        alert('Erreur lors de la publication du trajet');
+        createdRide = await rideService.createRide({
+          ...basePayload,
+          pricePerSeat: formData.price,
+          totalSeats: formData.seats
+        });
       }
+
+      if (!createdRide) {
+        throw new Error('Réponse invalide du serveur.');
+      }
+
+      onPublish(createdRide);
+    } catch (error: any) {
+      const message = error?.message || 'Impossible de publier le trajet. Merci de réessayer.';
+      setErrorMessage(message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Écran de succès pour les utilisateurs non connectés
-  if (publishedSuccess && !isAuthenticated) {
-    return (
-      <div className="max-w-md mx-auto px-4 py-20 text-center animate-fade-in">
-        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600">
-          <Icons.CheckCircle size={40} />
-        </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">🎉 Trajet publié avec succès !</h2>
-        <p className="text-gray-600 mb-6">
-          Votre trajet <strong>{formData.origin}</strong> → <strong>{formData.destination}</strong> est maintenant visible par les passagers.
-        </p>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6 text-left">
-          <div className="flex items-start gap-3">
-            <Icons.AlertCircle className="text-yellow-600 mt-0.5" size={20} />
-            <div>
-              <p className="text-yellow-800 font-medium">Conseil</p>
-              <p className="text-yellow-700 text-sm">
-                Créez un compte pour gérer vos trajets, recevoir des notifications et être contacté par les passagers.
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="space-y-3">
-          <button 
-            onClick={onCancel}
-            className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg"
-          >
-            Retour à l'accueil
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const minDate = new Date().toISOString().split('T')[0];
-  const featureOptions = ['Climatisation', 'Bagages acceptés', 'Non-fumeur', 'Musique', 'Animaux acceptés'];
-  const isFormValid = Boolean(
-    formData.origin &&
-    formData.destination &&
-    formData.date &&
-    formData.time &&
-    (isAuthenticated || (formData.driverName && formData.driverPhone))
-  );
-  const previewDate = formData.date ? new Date(`${formData.date}T${formData.time || '00:00'}`) : null;
-
   return (
-    <div className="max-w-6xl mx-auto px-4 py-10 space-y-8 animate-fade-in">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-gray-900 via-emerald-700 to-emerald-500 text-white p-8 shadow-2xl">
-        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at top, rgba(255,255,255,0.4), transparent 55%)' }}></div>
-        <div className="relative flex flex-col lg:flex-row gap-8 lg:items-center">
-          <div className="flex-1 space-y-4">
-            <p className="text-xs uppercase tracking-[0.3em] text-white/70">Publier un trajet</p>
-            <h1 className="text-3xl md:text-4xl font-bold leading-tight">Une interface premium pour annoncer votre trajet</h1>
-            <p className="text-white/80 text-base md:text-lg max-w-2xl">
-              Renseignez votre itinéraire, vos disponibilités et vos options confort. Votre annonce sera immédiatement visible par des centaines de passagers SUNU YOON.
-            </p>
-            <div className="flex flex-wrap gap-6 text-sm text-white/80">
-              <div>
-                <p className="text-2xl font-bold text-white">{formData.seats}</p>
-                <p>Places prévues</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">{formData.price.toLocaleString('fr-FR')}</p>
-                <p>Prix/passager (XOF)</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">{formData.features.length}</p>
-                <p>Options activées</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur">
-            <p className="text-white/70 text-xs uppercase tracking-widest mb-2">Votre trajet</p>
-            <div className="text-lg font-semibold">
-              {formData.origin || 'Départ'}
-              <span className="mx-2 text-white/60">→</span>
-              {formData.destination || 'Arrivée'}
-            </div>
-            <p className="text-sm text-white/80 mt-2">
-              {previewDate ? previewDate.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'Date et heure à définir'}
-            </p>
-            <p className="text-sm text-white/80 mt-1">{formData.carModel || 'Modèle de véhicule non renseigné'}</p>
-          </div>
+    <div className="max-w-6xl mx-auto px-4 py-6 md:py-12 animate-fade-in">
+      <div className="hidden md:block relative bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white rounded-3xl overflow-hidden shadow-xl mb-10">
+        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at top, rgba(255,255,255,0.6), transparent 70%)' }}></div>
+        <div className="relative p-10 md:p-14">
           <button
             onClick={onCancel}
             className="absolute top-6 right-6 text-sm font-medium text-white/80 hover:text-white flex items-center gap-2"
@@ -831,20 +958,29 @@ const PublishForm: React.FC<{
             <Icons.ChevronRight className="rotate-180" size={16} />
             Retour
           </button>
+          <p className="text-sm uppercase tracking-[0.4em] text-white/70 mb-3">Publier un trajet</p>
+          <h1 className="text-3xl md:text-4xl font-extrabold leading-tight max-w-2xl">
+            {isGuestMode ? 'Proposez un trajet sans créer de compte' : 'Partagez votre trajet avec la communauté SUNU YOON'}
+          </h1>
+          <p className="mt-4 text-white/80 max-w-3xl">
+            {isGuestMode
+              ? 'Nous afficherons votre annonce pendant 48h. Les passagers intéressés vous contacteront directement par téléphone ou WhatsApp.'
+              : 'Votre annonce sera associée à votre profil conducteur. Les passagers pourront réserver et payer directement dans SUNU YOON.'}
+          </p>
         </div>
       </div>
 
-      {!isAuthenticated && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex flex-col md:flex-row gap-4 md:items-center">
-          <div className="flex items-center gap-3 text-emerald-800 font-semibold">
-            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-emerald-600">
-              <Icons.CheckCircle size={20} />
-            </div>
-            Publiez gratuitement sans compte
-          </div>
-          <p className="text-sm text-emerald-800 flex-1">Nous utiliserons votre nom et numéro pour informer les passagers intéressés. Créez un compte plus tard pour gérer vos annonces.</p>
-        </div>
-      )}
+      <div className="md:hidden mb-6 flex items-center justify-between px-4">
+        <h1 className="text-xl font-bold text-gray-900">
+          {isGuestMode ? 'Ajouter un trajet' : 'Partager un trajet'}
+        </h1>
+        <button
+          onClick={onCancel}
+          className="text-gray-500 hover:text-gray-900"
+        >
+          <Icons.ChevronRight className="rotate-180" size={20} />
+        </button>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.7fr_1fr]">
         <div className="space-y-6">
@@ -854,7 +990,6 @@ const PublishForm: React.FC<{
                 <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Itinéraire</p>
                 <h2 className="text-2xl font-bold text-gray-900 mt-2">Points de départ et d'arrivée</h2>
               </div>
-              <span className="text-xs font-semibold text-gray-400">1/3</span>
             </div>
             <div className="grid gap-5">
               <div>
@@ -874,6 +1009,31 @@ const PublishForm: React.FC<{
                 />
               </div>
             </div>
+            {isGuestMode && (
+              <div className="grid gap-5 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">Votre nom*</label>
+                  <input
+                    type="text"
+                    value={driverName}
+                    onChange={(e) => setDriverName(e.target.value)}
+                    placeholder="Ex: Awa Diop"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">Téléphone WhatsApp*</label>
+                  <input
+                    type="tel"
+                    value={driverPhone}
+                    onChange={(e) => setDriverPhone(e.target.value)}
+                    placeholder="Ex: +221771234567"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Ce numéro sera partagé pour que les passagers puissent vous joindre.</p>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
@@ -882,7 +1042,6 @@ const PublishForm: React.FC<{
                 <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Horaires & véhicule</p>
                 <h2 className="text-2xl font-bold text-gray-900 mt-2">Quand partez-vous ?</h2>
               </div>
-              <span className="text-xs font-semibold text-gray-400">2/3</span>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
@@ -917,73 +1076,27 @@ const PublishForm: React.FC<{
             </div>
           </section>
 
-          {!isAuthenticated && (
-            <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <Icons.User size={18} />
-                </div>
-                <div>
-                  <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Coordonnées</p>
-                  <h2 className="text-xl font-bold text-gray-900">Présentez-vous aux passagers</h2>
-                </div>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">Nom complet*</label>
-                  <input
-                    type="text"
-                    value={formData.driverName || ''}
-                    onChange={(e) => handleChange('driverName', e.target.value)}
-                    placeholder="Ex: Moussa Diop"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">
-                    Téléphone / WhatsApp*
-                    <span className="ml-2 text-xs text-emerald-600">📱 Lien WhatsApp auto</span>
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.driverPhone || ''}
-                    onChange={(e) => handleChange('driverPhone', e.target.value)}
-                    placeholder="Ex: 221771234567 (avec indicatif +221)"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    👉 Format: 221XXXXXXXXX (ex: 221771234567). Les passagers pourront vous contacter directement sur WhatsApp!
-                  </p>
-                </div>
-              </div>
-              <p className="text-sm text-gray-500">Ces informations ne sont visibles que par les passagers intéressés. Elles permettent de vous contacter rapidement.</p>
-            </section>
-          )}
-
           <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Confort & infos</p>
                 <h2 className="text-2xl font-bold text-gray-900 mt-2">Personnalisez votre offre</h2>
               </div>
-              <span className="text-xs font-semibold text-gray-400">3/3</span>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-3">Options disponibles</label>
               <div className="flex flex-wrap gap-2">
-                {featureOptions.map(opt => {
+                {FEATURE_OPTIONS.map(opt => {
                   const isSelected = formData.features.includes(opt);
                   return (
                     <button
                       key={opt}
                       type="button"
                       onClick={() => {
-                        const newFeatures = isSelected
+                        const nextFeatures = isSelected
                           ? formData.features.filter(f => f !== opt)
                           : [...formData.features, opt];
-                        handleChange('features', newFeatures);
+                        handleChange('features', nextFeatures);
                       }}
                       className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${
                         isSelected
@@ -1002,55 +1115,9 @@ const PublishForm: React.FC<{
               <textarea
                 value={formData.description}
                 onChange={(e) => handleChange('description', e.target.value)}
-                placeholder="Dites-en plus sur vos habitudes de conduite, vos préférences ou un point de rendez-vous précis."
+                placeholder="Dites-en plus sur le point de rendez-vous ou vos préférences."
                 className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none h-28 resize-none"
               />
-            </div>
-          </section>
-        </div>
-
-        <div className="space-y-6 lg:sticky lg:top-8">
-          <section className="bg-gray-900 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
-            <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at top, rgba(16,185,129,0.4), transparent 60%)' }}></div>
-            <div className="relative space-y-6">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-white/70">Récapitulatif</p>
-                <h3 className="text-2xl font-semibold mt-2">Votre trajet</h3>
-              </div>
-              <div className="space-y-4 text-sm">
-                <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
-                  <p className="text-xs text-white/60 uppercase">Départ</p>
-                  <p className="text-lg font-semibold">{formData.origin || 'À renseigner'}</p>
-                </div>
-                <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
-                  <p className="text-xs text-white/60 uppercase">Arrivée</p>
-                  <p className="text-lg font-semibold">{formData.destination || 'À renseigner'}</p>
-                </div>
-                <div className="bg-white/10 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-white/60 uppercase">Date & heure</p>
-                    <p className="text-lg font-semibold">
-                      {previewDate
-                        ? previewDate.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
-                        : 'À confirmer'}
-                    </p>
-                  </div>
-                  <Icons.Calendar size={28} className="text-white/60" />
-                </div>
-                {formData.carModel && (
-                  <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
-                    <p className="text-xs text-white/60 uppercase">Véhicule</p>
-                    <p className="text-lg font-semibold">{formData.carModel}</p>
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs text-white/70">
-                {formData.features.map(feature => (
-                  <span key={feature} className="px-3 py-1 rounded-full border border-white/20 bg-white/5">
-                    {feature}
-                  </span>
-                ))}
-              </div>
             </div>
           </section>
 
@@ -1091,10 +1158,13 @@ const PublishForm: React.FC<{
                     inputMode="numeric"
                     pattern="[0-9]*"
                     value={formData.price}
-                    onChange={(e) => { const value = e.target.value.replace(/[^0-9]/g, ''); handleChange('price', value === '' ? 0 : parseInt(value, 10)); }}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      handleChange('price', value === '' ? 0 : parseInt(value, 10));
+                    }}
                     onBlur={(e) => {
                       const value = Number(e.target.value);
-                      if (!value || value < 1) {
+                      if (!value || value < 500) {
                         handleChange('price', 500);
                       }
                     }}
@@ -1102,7 +1172,7 @@ const PublishForm: React.FC<{
                     className="w-full px-4 py-3 text-2xl font-bold text-emerald-600 bg-white focus:outline-none"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Les voyageurs apprécient les tarifs clairs.  Tapez librement le tarif de votre choix.</p>
+                <p className="text-xs text-gray-500 mt-1">Les voyageurs apprécient les tarifs clairs. Ajustez librement votre prix.</p>
               </div>
               <div className="flex items-center justify-between">
                 <div>
@@ -1119,7 +1189,7 @@ const PublishForm: React.FC<{
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleChange('seats', Math.min(7, formData.seats + 1))}
+                    onClick={() => handleChange('seats', Math.min(8, formData.seats + 1))}
                     className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
                   >
                     +
@@ -1127,7 +1197,240 @@ const PublishForm: React.FC<{
                 </div>
               </div>
             </div>
-            <div className="pt-4 border-t border-gray-100 space-y-3">
+          </section>
+
+          <section className="bg-gray-900 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden md:hidden">
+            <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at top, rgba(16,185,129,0.4), transparent 60%)' }}></div>
+            <div className="relative space-y-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-white/70">Récapitulatif</p>
+                <h3 className="text-2xl font-semibold mt-2">Votre trajet</h3>
+              </div>
+              <div className="space-y-4 text-sm">
+                <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
+                  <p className="text-xs text-white/60 uppercase">Départ</p>
+                  <p className="text-lg font-semibold">{formData.origin || 'À renseigner'}</p>
+                </div>
+                <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
+                  <p className="text-xs text-white/60 uppercase">Arrivée</p>
+                  <p className="text-lg font-semibold">{formData.destination || 'À renseigner'}</p>
+                </div>
+                <div className="bg-white/10 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-white/60 uppercase">Date & heure</p>
+                    <p className="text-lg font-semibold">
+                      {previewDate
+                        ? previewDate.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+                        : 'À confirmer'}
+                    </p>
+                  </div>
+                  <Icons.Calendar size={28} className="text-white/60" />
+                </div>
+                {formData.carModel && (
+                  <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
+                    <p className="text-xs text-white/60 uppercase">Véhicule</p>
+                    <p className="text-lg font-semibold">{formData.carModel}</p>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs text-white/70">
+                {normalizedFeatures.length === 0 ? (
+                  <span className="px-3 py-1 rounded-full border border-white/10 bg-white/5">Aucune option sélectionnée</span>
+                ) : (
+                  normalizedFeatures.map(feature => (
+                    <span key={feature} className="px-3 py-1 rounded-full border border-white/20 bg-white/5">
+                      {feature}
+                    </span>
+                  ))
+                )}
+              </div>
+              {isGuestMode && (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white/80">
+                  <p className="text-xs uppercase text-white/60 mb-1">Contact affiché</p>
+                  <p className="font-semibold">{driverName || 'Nom à renseigner'}</p>
+                  <p>{driverPhone || 'Téléphone à renseigner'}</p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
+            <div className="pt-4 border-t border-gray-100 space-y-4">
+              {errorMessage && (
+                <div className="flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  <Icons.AlertCircle size={16} />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !isFormValid}
+                className="w-full py-4 rounded-2xl font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 shadow-lg hover:shadow-2xl hover:from-emerald-700 hover:to-emerald-600 transform hover:scale-[1.02] active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Publication...
+                  </>
+                ) : (
+                  <>
+                    <Icons.CheckCircle size={18} />
+                    Publier le trajet
+                  </>
+                )}
+              </button>
+              <button
+                onClick={onCancel}
+                className="w-full py-3 rounded-2xl font-semibold text-gray-500 hover:text-gray-900 border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all transform active:scale-95"
+              >
+                Annuler
+              </button>
+              <p className="text-xs text-gray-400 text-center">
+                En publiant, vous acceptez les conditions SUNU YOON et vous engagez à honorer votre trajet.
+              </p>
+            </div>
+          </section>
+        </div>
+
+        <div className="space-y-6 lg:sticky lg:top-8 hidden lg:block">
+          <section className="bg-gray-900 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
+            <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at top, rgba(16,185,129,0.4), transparent 60%)' }}></div>
+            <div className="relative space-y-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-white/70">Récapitulatif</p>
+                <h3 className="text-2xl font-semibold mt-2">Votre trajet</h3>
+              </div>
+              <div className="space-y-4 text-sm">
+                <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
+                  <p className="text-xs text-white/60 uppercase">Départ</p>
+                  <p className="text-lg font-semibold">{formData.origin || 'À renseigner'}</p>
+                </div>
+                <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
+                  <p className="text-xs text-white/60 uppercase">Arrivée</p>
+                  <p className="text-lg font-semibold">{formData.destination || 'À renseigner'}</p>
+                </div>
+                <div className="bg-white/10 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-white/60 uppercase">Date & heure</p>
+                    <p className="text-lg font-semibold">
+                      {previewDate
+                        ? previewDate.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+                        : 'À confirmer'}
+                    </p>
+                  </div>
+                  <Icons.Calendar size={28} className="text-white/60" />
+                </div>
+                {formData.carModel && (
+                  <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
+                    <p className="text-xs text-white/60 uppercase">Véhicule</p>
+                    <p className="text-lg font-semibold">{formData.carModel}</p>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs text-white/70">
+                {normalizedFeatures.length === 0 ? (
+                  <span className="px-3 py-1 rounded-full border border-white/10 bg-white/5">Aucune option sélectionnée</span>
+                ) : (
+                  normalizedFeatures.map(feature => (
+                    <span key={feature} className="px-3 py-1 rounded-full border border-white/20 bg-white/5">
+                      {feature}
+                    </span>
+                  ))
+                )}
+              </div>
+              {isGuestMode && (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white/80">
+                  <p className="text-xs uppercase text-white/60 mb-1">Contact affiché</p>
+                  <p className="font-semibold">{driverName || 'Nom à renseigner'}</p>
+                  <p>{driverPhone || 'Téléphone à renseigner'}</p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Tarification</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-2">Ajustez vos conditions</h3>
+            </div>
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Prix par passager</p>
+                  <p className="text-3xl font-extrabold text-emerald-600">{formData.price.toLocaleString('fr-FR')} XOF</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleChange('price', Math.max(500, formData.price - 500))}
+                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleChange('price', formData.price + 500)}
+                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">Saisir votre tarif</label>
+                <div className="flex items-center rounded-2xl border-2 border-gray-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 overflow-hidden transition-all">
+                  <span className="px-4 py-3 text-gray-500 bg-gray-50 border-r border-gray-100 font-semibold">XOF</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={formData.price}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      handleChange('price', value === '' ? 0 : parseInt(value, 10));
+                    }}
+                    onBlur={(e) => {
+                      const value = Number(e.target.value);
+                      if (!value || value < 500) {
+                        handleChange('price', 500);
+                      }
+                    }}
+                    placeholder="Ex: 2500"
+                    className="w-full px-4 py-3 text-2xl font-bold text-emerald-600 bg-white focus:outline-none"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Les voyageurs apprécient les tarifs clairs. Ajustez librement votre prix.</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Places disponibles</p>
+                  <p className="text-3xl font-extrabold text-gray-900">{formData.seats}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleChange('seats', Math.max(1, formData.seats - 1))}
+                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleChange('seats', Math.min(8, formData.seats + 1))}
+                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="pt-4 border-t border-gray-100 space-y-4">
+              {errorMessage && (
+                <div className="flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  <Icons.AlertCircle size={16} />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting || !isFormValid}
@@ -1315,7 +1618,6 @@ function AppContent() {
   
   const [currentView, setCurrentView] = useState('home'); 
   const [searchResults, setSearchResults] = useState<Ride[]>([]);
-  const [publishedRides, setPublishedRides] = useState<Ride[]>([]); // Stock des trajets publiés
   const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
@@ -1338,29 +1640,6 @@ function AppContent() {
     loading: false,
     error: null
   });
-
-  const highlightedDriverRide = useMemo<Ride>(() => ({
-    id: 'featured-cheikh-ndiaye',
-    driver: {
-      id: 'driver-featured',
-      name: 'Cheikh Ndiaye',
-      avatarUrl: 'https://ui-avatars.com/api/?name=Cheikh+Ndiaye&background=059669&color=fff',
-      rating: 4.9,
-      reviewCount: 128,
-      isVerified: true
-    },
-    origin: 'Dakar, Plateau',
-    destination: 'Thiès, Grand Standing',
-    departureTime: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-    price: 4500,
-    currency: 'XOF',
-    seatsAvailable: 2,
-    totalSeats: 4,
-    carModel: 'Toyota Corolla 2019',
-    description: 'Départ ponctuel avec climatisation et rafraîchissements. Pause à Keur Massar si besoin.',
-    features: ['Climatisation', 'Non-fumeur', 'Bagages acceptés'],
-    duration: '1h 15m'
-  }), []);
 
   // Géolocalisation automatique au chargement (silencieuse)
   useEffect(() => {
@@ -1389,52 +1668,6 @@ function AppContent() {
     // Lancer la géolocalisation après un court délai
     const timer = setTimeout(initLocation, 1000);
     return () => clearTimeout(timer);
-  }, []);
-
-  // Charger les trajets publiés depuis le localStorage au démarrage
-  useEffect(() => {
-    try {
-      const storedRides = localStorage.getItem('publishedRides');
-      const pendingRides = localStorage.getItem('pendingRides');
-
-      const hydratedPublished = storedRides ? JSON.parse(storedRides) : [];
-
-      // Migrer les anciennes annonces invité stockées dans pendingRides vers publishedRides
-      if (pendingRides) {
-        const pending = JSON.parse(pendingRides);
-        const migrated = pending.map((p: any) => ({
-          id: p.id || `pending_${Date.now()}`,
-          driver: {
-            id: 'guest',
-            name: p.driverName || 'Conducteur invité',
-            avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.driverName || 'Guest')}&background=10b981&color=fff`,
-            rating: 4.5,
-            reviewCount: 0,
-            isVerified: false
-          },
-          origin: p.origin,
-          destination: p.destination,
-          departureTime: p.departureTime,
-          price: p.price,
-          currency: 'XOF',
-          seatsAvailable: p.seats,
-          totalSeats: p.seats,
-          carModel: p.carModel || 'Véhicule',
-          description: p.description || '',
-          features: p.features || [],
-          duration: '~3h'
-        }));
-
-        const merged = [...migrated, ...hydratedPublished];
-        setPublishedRides(merged);
-        localStorage.setItem('publishedRides', JSON.stringify(merged));
-        localStorage.removeItem('pendingRides');
-      } else {
-        setPublishedRides(hydratedPublished);
-      }
-    } catch (error) {
-      console.error('Erreur chargement trajets:', error);
-    }
   }, []);
 
   const handleGeolocate = useCallback(async () => {
@@ -1474,7 +1707,7 @@ function AppContent() {
   const handleSearch = async (params: SearchParams) => {
     setIsLoading(true);
     setSearchParams(params);
-    
+
     try {
       const rides = await rideService.searchRides({
         origin: params.origin,
@@ -1482,37 +1715,13 @@ function AppContent() {
         date: params.date,
         seats: params.passengers
       });
-      
+
       const apiRides = rides.map(mapApiRideToRide);
-      
-      // Filtrer les trajets publiés localement qui correspondent à la recherche
-      const matchingLocalRides = publishedRides.filter(ride => {
-        const originMatch = ride.origin.toLowerCase().includes(params.origin.toLowerCase()) ||
-                           params.origin.toLowerCase().includes(ride.origin.toLowerCase());
-        const destMatch = ride.destination.toLowerCase().includes(params.destination.toLowerCase()) ||
-                         params.destination.toLowerCase().includes(ride.destination.toLowerCase());
-        const dateMatch = ride.departureTime.startsWith(params.date);
-        
-        return originMatch && destMatch && dateMatch && ride.seatsAvailable >= params.passengers;
-      });
-      
-      // Fusionner les résultats : trajets locaux en premier
-      const allRides = [...matchingLocalRides, ...apiRides];
-      setSearchResults(allRides);
+      setSearchResults(apiRides);
       setCurrentView('search');
     } catch (error) {
       console.error('Erreur recherche:', error);
-      // En cas d'erreur API, afficher quand même les trajets locaux
-      const matchingLocalRides = publishedRides.filter(ride => {
-        const originMatch = ride.origin.toLowerCase().includes(params.origin.toLowerCase()) ||
-                           params.origin.toLowerCase().includes(ride.origin.toLowerCase());
-        const destMatch = ride.destination.toLowerCase().includes(params.destination.toLowerCase()) ||
-                         params.destination.toLowerCase().includes(ride.destination.toLowerCase());
-        const dateMatch = ride.departureTime.startsWith(params.date);
-        
-        return originMatch && destMatch && dateMatch && ride.seatsAvailable >= params.passengers;
-      });
-      setSearchResults(matchingLocalRides);
+      setSearchResults([]);
     } finally {
       setIsLoading(false);
     }
@@ -1524,69 +1733,25 @@ function AppContent() {
   };
 
   const initiateBooking = () => {
+    if (!selectedRide || selectedRide.isGuest) {
+      return;
+    }
     setShowBookingModal(true);
   };
 
-  const handlePublishRide = async (draft: DraftRide) => {
-    try {
-      // Créer un trajet à partir du draft
-      const newRide: Ride = {
-        id: (draft as any).id || `local_${Date.now()}`,
-        driver: user ? {
-          id: user.id,
-          name: `${user.firstName} ${user.lastName || ''}`.trim(),
-          avatarUrl: user.avatarUrl || `https://ui-avatars.com/api/?name=${user.firstName}&background=10b981&color=fff`,
-          rating: 4.5,
-          reviewCount: 0,
-          isVerified: user.isVerified || false
-        } : {
-          id: 'guest',
-          name: 'Nouveau conducteur',
-          avatarUrl: 'https://ui-avatars.com/api/?name=Guest&background=10b981&color=fff',
-          rating: 4.5,
-          reviewCount: 0,
-          isVerified: false
-        },
-        origin: draft.origin,
-        destination: draft.destination,
-        departureTime: `${draft.date}T${draft.time}:00`,
-        price: draft.price,
-        currency: 'XOF',
-        seatsAvailable: draft.seats,
-        totalSeats: draft.seats,
-        carModel: draft.carModel || 'Véhicule',
-        description: draft.description,
-        features: draft.features,
-        duration: '~3h'
-      };
-
-      // Ajouter le trajet au stock local
-      setPublishedRides(prev => [newRide, ...prev]);
-      
-      // Mettre à jour la recherche courante pour afficher immédiatement le trajet
-      const publishSearchParams: SearchParams = {
-        origin: draft.origin,
-        destination: draft.destination,
-        date: draft.date,
-        passengers: searchParams?.passengers || 1,
-        userLocation: userLocation.coords || undefined
-      };
-      setSearchParams(publishSearchParams);
-      setSearchResults(prev => [newRide, ...prev]);
-      setCurrentView('search');
-
-      // Sauvegarder dans localStorage pour persistance
-      const storedRides = JSON.parse(localStorage.getItem('publishedRides') || '[]');
-      storedRides.push(newRide);
-      localStorage.setItem('publishedRides', JSON.stringify(storedRides));
-
-      // Forcer le rechargement du profil si l'utilisateur est connecté
-      if (isAuthenticated) {
-        setProfileRefreshKey(prev => prev + 1);
-      }
-    } catch (error) {
-      console.error('Erreur lors de la publication:', error);
-    }
+  const handlePublishRide = (apiRide: ApiRide) => {
+    const ride = mapApiRideToRide(apiRide);
+    setSearchParams({
+      origin: ride.origin,
+      destination: ride.destination,
+      date: ride.departureTime.split('T')[0],
+      passengers: searchParams?.passengers || 1,
+      userLocation: userLocation.coords || undefined
+    });
+    setSearchResults(prev => [ride, ...prev.filter(r => r.id !== ride.id)]);
+    setSelectedRide(ride);
+    setCurrentView('search');
+    setProfileRefreshKey(prev => prev + 1);
   };
 
   const handleBookingSuccess = (bookingId: string) => {
@@ -1757,8 +1922,23 @@ function AppContent() {
         ) : null;
       
       case 'publish':
-        // Publication accessible même sans compte
-        return <PublishForm onPublish={handlePublishRide} onCancel={() => setCurrentView('home')} isAuthenticated={isAuthenticated} />;
+        if (!isAuthenticated) {
+          return (
+            <PublishForm
+              mode="guest"
+              onPublish={handlePublishRide}
+              onCancel={() => setCurrentView('home')}
+            />
+          );
+        }
+        return (
+          <PublishForm
+            mode="registered"
+            onPublish={handlePublishRide}
+            onCancel={() => setCurrentView('home')}
+            defaultDriverName={user ? `${user.firstName} ${user.lastName || ''}`.trim() : ''}
+          />
+        );
       
       case 'profile':
         if (!isAuthenticated) {
@@ -1875,7 +2055,7 @@ function AppContent() {
         </div>
       )}
       
-      {selectedRide && (
+      {selectedRide && !selectedRide.isGuest && (
         <>
           <BookingModal 
             isOpen={showBookingModal}

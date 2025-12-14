@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { body, query, validationResult } from 'express-validator';
+import { GuestRideStatus } from '@prisma/client';
 import { prisma } from '../index';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest, authMiddleware, optionalAuth } from '../middleware/auth';
+import { mapGuestRide, mapRegisteredRide } from '../utils/rideMapper';
 
 const router = Router();
 
@@ -75,30 +77,44 @@ router.get('/',
         take: 20
       });
 
+      const guestWhereClause: any = {
+        status: GuestRideStatus.PUBLISHED,
+        availableSeats: { gte: minSeats }
+      };
+
+      if (origin && origin.trim()) {
+        guestWhereClause.originCity = { contains: origin.trim(), mode: 'insensitive' };
+      }
+      if (destination && destination.trim()) {
+        guestWhereClause.destinationCity = { contains: destination.trim(), mode: 'insensitive' };
+      }
+      if (date) {
+        const searchDate = new Date(date as string);
+        const nextDay = new Date(searchDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        guestWhereClause.departureTime = {
+          gte: searchDate,
+          lt: nextDay
+        };
+      } else {
+        guestWhereClause.departureTime = { gte: new Date() };
+      }
+
+      const guestRides = await prisma.guestRide.findMany({
+        where: guestWhereClause,
+        orderBy: { departureTime: 'asc' },
+        take: 20
+      });
+
+      const combined = [...rides.map(mapRegisteredRide), ...guestRides.map(mapGuestRide)]
+        .sort((a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime());
+
       res.json({
         success: true,
         data: {
-          rides: rides.map(ride => ({
-            id: ride.id,
-            driver: ride.driver,
-            origin: ride.originCity,
-            originAddress: ride.originAddress,
-            destination: ride.destinationCity,
-            destinationAddress: ride.destinationAddress,
-            departureTime: ride.departureTime.toISOString(),
-            duration: `${Math.floor(ride.estimatedDuration / 60)}h ${ride.estimatedDuration % 60}m`,
-            estimatedDuration: ride.estimatedDuration,
-            price: ride.pricePerSeat,
-            currency: ride.currency,
-            seatsAvailable: ride.availableSeats,
-            totalSeats: ride.totalSeats,
-            carModel: ride.driver.carModel || 'Véhicule',
-            features: ride.features,
-            description: ride.description,
-            status: ride.status,
-            createdAt: ride.createdAt.toISOString()
-          })),
-          total: rides.length
+          rides: combined,
+          total: combined.length
         }
       });
     } catch (error) {
@@ -112,6 +128,31 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res, next) => {
   try {
     const { id } = req.params;
 
+    if (id.startsWith('guest_')) {
+      const guestId = id.replace('guest_', '');
+      const guestRide = await prisma.guestRide.findUnique({ where: { id: guestId } });
+
+      if (!guestRide) {
+        throw new AppError('Trajet non trouvé', 404);
+      }
+
+      const mappedRide = mapGuestRide(guestRide);
+
+      return res.json({
+        success: true,
+        data: {
+          ride: {
+            ...mappedRide,
+            originCoords: null,
+            destinationCoords: null,
+            distance: guestRide.distance,
+            passengers: []
+          },
+          userBooking: null
+        }
+      });
+    }
+
     const ride = await prisma.ride.findUnique({
       where: { id },
       include: {
@@ -123,8 +164,7 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res, next) => {
             rating: true,
             reviewCount: true,
             isVerified: true,
-            carModel: true,
-            createdAt: true
+            carModel: true
           }
         },
         bookings: {
@@ -144,34 +184,21 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res, next) => {
       throw new AppError('Trajet non trouvé', 404);
     }
 
-    // Vérifier si l'utilisateur connecté a déjà réservé
     let userBooking = null;
     if (req.user) {
       userBooking = ride.bookings.find(b => b.passenger.id === req.user!.id);
     }
 
+    const mappedRide = mapRegisteredRide(ride);
+
     res.json({
       success: true,
       data: {
         ride: {
-          id: ride.id,
-          driver: ride.driver,
-          origin: ride.originCity,
-          originAddress: ride.originAddress,
+          ...mappedRide,
           originCoords: ride.originLat && ride.originLng ? { lat: ride.originLat, lng: ride.originLng } : null,
-          destination: ride.destinationCity,
-          destinationAddress: ride.destinationAddress,
           destinationCoords: ride.destinationLat && ride.destinationLng ? { lat: ride.destinationLat, lng: ride.destinationLng } : null,
-          departureTime: ride.departureTime.toISOString(),
-          duration: `${Math.floor(ride.estimatedDuration / 60)}h ${ride.estimatedDuration % 60}m`,
           distance: ride.distance,
-          price: ride.pricePerSeat,
-          currency: ride.currency,
-          seatsAvailable: ride.availableSeats,
-          totalSeats: ride.totalSeats,
-          features: ride.features,
-          description: ride.description,
-          status: ride.status,
           passengers: ride.bookings.map(b => ({
             id: b.passenger.id,
             name: b.passenger.name,
@@ -270,6 +297,86 @@ router.post('/',
         success: true,
         message: 'Trajet publié avec succès',
         data: { ride }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/guest',
+  [
+    body('driverName').trim().notEmpty().withMessage('Le nom du conducteur est requis'),
+    body('driverPhone').trim().notEmpty().withMessage('Le numéro de téléphone est requis'),
+    body('originCity').trim().notEmpty().withMessage('La ville de départ est requise'),
+    body('destinationCity').trim().notEmpty().withMessage('La ville d\'arrivée est requise'),
+    body('departureTime').isISO8601().toDate().withMessage('La date de départ est invalide'),
+    body('pricePerSeat').isInt({ gt: 0 }).withMessage('Le prix doit être supérieur à 0'),
+    body('availableSeats').optional().isInt({ min: 1, max: 8 }).withMessage('Places disponibles invalides'),
+    body('totalSeats').optional().isInt({ min: 1, max: 8 }).withMessage('Nombre total de places invalide'),
+    body('features').optional().isArray().withMessage('Les options doivent être une liste')
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError(errors.array()[0].msg, 400);
+      }
+
+      const {
+        driverName,
+        driverPhone,
+        originCity,
+        originAddress,
+        destinationCity,
+        destinationAddress,
+        departureTime,
+        estimatedDuration,
+        distance,
+        pricePerSeat,
+        currency,
+        availableSeats,
+        totalSeats,
+        carModel,
+        description,
+        features
+      } = req.body;
+
+      const normalizedAvailableSeats = availableSeats ?? 1;
+      const normalizedTotalSeats = totalSeats ?? normalizedAvailableSeats;
+
+      if (normalizedAvailableSeats > normalizedTotalSeats) {
+        throw new AppError('Le nombre de places disponibles ne peut pas dépasser le total', 400);
+      }
+
+      const guestRide = await prisma.guestRide.create({
+        data: {
+          driverName,
+          driverPhone,
+          originCity,
+          originAddress,
+          destinationCity,
+          destinationAddress,
+          departureTime: new Date(departureTime),
+          estimatedDuration: estimatedDuration ?? 180,
+          distance: distance ?? null,
+          pricePerSeat,
+          currency: currency || 'XOF',
+          availableSeats: normalizedAvailableSeats,
+          totalSeats: normalizedTotalSeats,
+          carModel: carModel ?? null,
+          description: description ?? null,
+          features: Array.isArray(features) ? features : [],
+          status: GuestRideStatus.PUBLISHED
+        }
+      });
+
+      return res.status(201).json({
+        success: true,
+        data: {
+          ride: mapGuestRide(guestRide)
+        }
       });
     } catch (error) {
       next(error);
