@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: sunu-yoon-api
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: postgresql://sunuyoon:gMlbeHq2p8VQupCBHbl8ESK1R3QvJYpo@dpg-d4vdpve3jp1c73ej9p60-a.frankfurt-postgres.render.com/sunuyoondb
+      - key: DIRECT_URL
+        value: postgresql://sunuyoon:gMlbeHq2p8VQupCBHbl8ESK1R3QvJYpo@dpg-d4vdpve3jp1c73ej9p60-a.frankfurt-postgres.render.com/sunuyoondb
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 1h
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: FRONTEND_URL
+        value: https://sunu-yoon-app.web.app
+      - key: PORT
+        value: 10000
