@@ -696,15 +696,24 @@ const PublishForm: React.FC<{
       
       // Si l'utilisateur n'est pas connecté, on stocke localement et on affiche un message de succès
       if (!isAuthenticated) {
-        // Stocker le trajet en localStorage pour les utilisateurs non connectés
-        const pendingRides = JSON.parse(localStorage.getItem('pendingRides') || '[]');
-        pendingRides.push({
-          ...formData,
-          departureTime,
-          id: 'pending_' + Date.now(),
-          createdAt: new Date().toISOString()
-        });
-        localStorage.setItem('pendingRides', JSON.stringify(pendingRides));
+        // Construire une annonce locale persistée
+        const contactLine = formData.driverName && formData.driverPhone
+          ? `\nContact: ${formData.driverName} (${formData.driverPhone})`
+          : '';
+
+        const localDraft: DraftRide = {
+          origin: formData.origin,
+          destination: formData.destination,
+          date: formData.date,
+          time: formData.time,
+          price: formData.price,
+          seats: formData.seats,
+          carModel: formData.carModel,
+          description: `${formData.description || ''}${contactLine}`.trim(),
+          features: formData.features
+        };
+
+        onPublish(localDraft);
         setPublishedSuccess(true);
       } else {
         const created = await rideService.createRide({
@@ -1386,9 +1395,42 @@ function AppContent() {
   useEffect(() => {
     try {
       const storedRides = localStorage.getItem('publishedRides');
-      if (storedRides) {
-        const rides = JSON.parse(storedRides);
-        setPublishedRides(rides);
+      const pendingRides = localStorage.getItem('pendingRides');
+
+      const hydratedPublished = storedRides ? JSON.parse(storedRides) : [];
+
+      // Migrer les anciennes annonces invité stockées dans pendingRides vers publishedRides
+      if (pendingRides) {
+        const pending = JSON.parse(pendingRides);
+        const migrated = pending.map((p: any) => ({
+          id: p.id || `pending_${Date.now()}`,
+          driver: {
+            id: 'guest',
+            name: p.driverName || 'Conducteur invité',
+            avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.driverName || 'Guest')}&background=10b981&color=fff`,
+            rating: 4.5,
+            reviewCount: 0,
+            isVerified: false
+          },
+          origin: p.origin,
+          destination: p.destination,
+          departureTime: p.departureTime,
+          price: p.price,
+          currency: 'XOF',
+          seatsAvailable: p.seats,
+          totalSeats: p.seats,
+          carModel: p.carModel || 'Véhicule',
+          description: p.description || '',
+          features: p.features || [],
+          duration: '~3h'
+        }));
+
+        const merged = [...migrated, ...hydratedPublished];
+        setPublishedRides(merged);
+        localStorage.setItem('publishedRides', JSON.stringify(merged));
+        localStorage.removeItem('pendingRides');
+      } else {
+        setPublishedRides(hydratedPublished);
       }
     } catch (error) {
       console.error('Erreur chargement trajets:', error);
