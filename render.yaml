@@ -1,20 +1,24 @@
 services:
   - type: web
-    name: sunu-yoon-api
+    name: sunu-yoon-backend
     runtime: node
     region: frankfurt
     plan: free
     rootDir: backend
-    buildCommand: npm install && npx prisma generate && npm run build
-    startCommand: npm start
-    healthCheckPath: /health
+    buildCommand: npm install && npx prisma migrate deploy
+    startCommand: npm run dev
+    healthCheckPath: /api/rides
     envVars:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        value: postgresql://sunuyoon:gMlbeHq2p8VQupCBHbl8ESK1R3QvJYpo@dpg-d4vdpve3jp1c73ej9p60-a.frankfurt-postgres.render.com/sunuyoondb
+        fromDatabase:
+          name: sunuyoondb
+          property: connectionString
       - key: DIRECT_URL
-        value: postgresql://sunuyoon:gMlbeHq2p8VQupCBHbl8ESK1R3QvJYpo@dpg-d4vdpve3jp1c73ej9p60-a.frankfurt-postgres.render.com/sunuyoondb
+        fromDatabase:
+          name: sunuyoondb
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
@@ -24,6 +28,23 @@ services:
       - key: JWT_REFRESH_EXPIRES_IN
         value: 7d
       - key: FRONTEND_URL
-        value: https://sunu-yoon-app.web.app
+        value: https://sunu-yoon.onrender.com
       - key: PORT
-        value: 10000
+        value: 3001
+
+  - type: static_site
+    name: sunu-yoon-frontend
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://sunu-yoon-backend.onrender.com/api
+      - key: VITE_SOCKET_URL
+        value: https://sunu-yoon-backend.onrender.com
+
+databases:
+  - name: sunuyoondb
+    ipAllowList: []
