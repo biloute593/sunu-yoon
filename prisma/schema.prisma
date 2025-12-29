@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String    @id @default(uuid())
+  email       String    @unique
+  password    String
+  firstName   String
+  lastName    String?
+  name        String?   // Computed or stored for convenience
+  avatarUrl   String?
+  phoneNumber String?
+  rating      Float     @default(5.0)
+  reviewCount Int       @default(0)
+  isVerified  Boolean   @default(false)
+  carModel    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  rides       Ride[]
+  bookings    Booking[]
+  messagesSent     Message[] @relation("SentMessages")
+  messagesReceived Message[] @relation("ReceivedMessages")
+  notifications    Notification[]
+}
+
+model Ride {
+  id                String    @id @default(uuid())
+  driverId          String
+  driver            User      @relation(fields: [driverId], references: [id])
+  
+  originCity        String
+  originAddress     String?
+  originLat         Float?
+  originLng         Float?
+  
+  destinationCity   String
+  destinationAddress String?
+  destinationLat    Float?
+  destinationLng    Float?
+  
+  departureTime     DateTime
+  pricePerSeat      Int
+  currency          String    @default("XOF")
+  
+  totalSeats        Int
+  availableSeats    Int
+  
+  description       String?
+  features          String[]
+  
+  estimatedDuration Int       @default(0) // In minutes
+  distance          Float?    // In km
+  
+  status            String    @default("OPEN") // OPEN, FULL, CANCELLED, COMPLETED
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  bookings          Booking[]
+}
+
+model Booking {
+  id          String    @id @default(uuid())
+  rideId      String
+  ride        Ride      @relation(fields: [rideId], references: [id])
+  passengerId String
+  passenger   User      @relation(fields: [passengerId], references: [id])
+  
+  seats       Int
+  status      String    @default("PENDING") // PENDING, CONFIRMED, CANCELLED, REJECTED
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model GuestBooking {
+  id          String    @id @default(uuid())
+  rideId      String?   // Optional link to a ride if it matches
+  
+  origin      String
+  destination String
+  date        DateTime
+  seats       Int
+  
+  name        String
+  phone       String
+  
+  status      String    @default("PENDING")
+  createdAt   DateTime  @default(now())
+}
+
+model Message {
+  id          String    @id @default(uuid())
+  content     String
+  senderId    String
+  sender      User      @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId  String
+  receiver    User      @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  
+  read        Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  
+  type        String    // BOOKING_REQUEST, BOOKING_CONFIRMED, etc.
+  title       String
+  message     String
+  read        Boolean   @default(false)
+  data        Json?
+  
+  createdAt   DateTime  @default(now())
+}

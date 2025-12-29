@@ -1,0 +1,11 @@
+{
+  "name": "Sunu Yoon",
+  "description": "La première plateforme de covoiturage au Sénégal. Voyagez moins cher, en toute confiance, partout au Sénégal.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "permissions": [
+    "geolocation"
+  ],
+  "permissionsAutoApprove": true
+}
