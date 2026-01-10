@@ -1,14 +1,14 @@
 import React from 'react';
-import { 
-  Car, 
-  MapPin, 
-  Calendar, 
-  Users, 
-  Search, 
-  Star, 
-  CheckCircle, 
-  Clock, 
-  Shield, 
+import {
+  Car,
+  MapPin,
+  Calendar,
+  Users,
+  Search,
+  Star,
+  CheckCircle,
+  Clock,
+  Shield,
   MessageCircle,
   PlusCircle,
   Menu,
@@ -28,7 +28,10 @@ import {
   Pause,
   Play,
   StopCircle,
-  Phone
+  Phone,
+  Lock,
+  LogIn,
+  UserPlus
 } from 'lucide-react';
 
 export const Icons = {
@@ -60,5 +63,8 @@ export const Icons = {
   Pause,
   Play,
   StopCircle,
-  Phone
+  Phone,
+  Lock,
+  LogIn,
+  UserPlus
 };

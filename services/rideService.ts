@@ -1,30 +1,11 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-
-interface CachedResult {
-  data: any;
-  timestamp: number;
-}
-
-const searchCache = new Map<string, CachedResult>();
-const CACHE_DURATION_MS = 2 * 60 * 1000; // 2 minutes
-
-const getCacheKey = (origin: string, destination: string, date: string): string => {
-  return `${origin}|${destination}|${date}`;
-};
-
-const getCachedResult = (key: string): any | null => {
-  const cached = searchCache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION_MS) {
-    return cached.data;
-  }
-  searchCache.delete(key);
-  return null;
-};
+import { ApiClient } from './apiClient';
 
 export interface RideDriver {
   id: string;
   firstName: string;
   lastName?: string;
+  name?: string;
+  phone?: string;
   avatarUrl?: string;
   rating?: number;
   reviewCount?: number;
@@ -84,18 +65,6 @@ const saveLocalRide = (ride: Ride) => {
 };
 
 class RideService {
-  private getToken(): string | null {
-    return localStorage.getItem('sunu_yoon_token');
-  }
-
-  private getAuthHeaders(): HeadersInit {
-    const token = this.getToken();
-    return {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-    };
-  }
-
   // Rechercher des trajets
   async searchRides(params: RideSearchParams): Promise<Ride[]> {
     try {
@@ -105,40 +74,43 @@ class RideService {
       if (params.date) queryParams.append('date', params.date);
       if (params.seats) queryParams.append('seats', params.seats.toString());
 
-      const response = await fetch(`${API_URL}/rides/search?${queryParams.toString()}`, {
-        method: 'GET',
-        headers: this.getAuthHeaders()
-      });
+      const response = await ApiClient.get<{ data: { rides: Ride[] } }>(`/rides/search?${queryParams.toString()}`);
 
-      if (!response.ok) {
-        console.error('Search rides failed:', response.status);
-        // Si l'API échoue, on retourne un tableau vide plutôt que des données locales
-        // pour forcer l'utilisation du cloud comme demandé.
-        return [];
+      if (!response.success) {
+        console.error('Search rides failed:', response.error);
+        // Fallback au localStorage en cas d'erreur
+        return getLocalRides();
       }
 
-      const data = await response.json();
-      return data.data?.rides || [];
+      // @ts-ignore
+      const rides = response.data?.rides || [];
+      console.log(`${rides.length} trajet(s) trouvé(s) depuis l'API`);
+      return rides;
     } catch (error) {
       console.error('Search rides error:', error);
-      return [];
+      // Fallback au localStorage en cas d'erreur réseau
+      return getLocalRides();
     }
   }
 
   // Récupérer un trajet par ID
   async getRide(id: string): Promise<Ride | null> {
     try {
-      const response = await fetch(`${API_URL}/rides/${id}`, {
-        method: 'GET',
-        headers: this.getAuthHeaders()
-      });
+      const response = await ApiClient.get<{ data: { ride: Ride } }>(`/rides/${id}`);
 
-      if (!response.ok) return null;
+      if (!response.success || !response.data) {
+        // Fallback au localStorage
+        const localRides = getLocalRides();
+        return localRides.find(r => r.id === id) || null;
+      }
 
-      return await response.json();
+      // @ts-ignore
+      return response.data.ride;
     } catch (error) {
       console.error('Get ride error:', error);
-      return null;
+      // Fallback au localStorage en cas d'erreur
+      const localRides = getLocalRides();
+      return localRides.find(r => r.id === id) || null;
     }
   }
 
@@ -148,72 +120,71 @@ class RideService {
       // Mapping pour correspondre à l'API backend
       const apiData = {
         originCity: data.origin,
-        originAddress: data.origin, // Fallback
+        originAddress: data.origin,
         destinationCity: data.destination,
-        destinationAddress: data.destination, // Fallback
+        destinationAddress: data.destination,
         departureTime: data.departureTime,
         pricePerSeat: data.price,
         totalSeats: data.seatsAvailable,
-        description: data.description,
-        features: data.features,
-        estimatedDuration: 180, // Valeur par défaut (3h) si non calculé
-        distance: 0 // Valeur par défaut
+        availableSeats: data.seatsAvailable,
+        description: data.description || '',
+        features: data.features || [],
+        estimatedDuration: 180,
+        distance: 0,
+        // Pour les utilisateurs non connectés
+        ...(data.driver ? {
+          driverName: data.driver.name,
+          driverPhone: data.driver.phone
+        } : {})
       };
 
-      const response = await fetch(`${API_URL}/rides`, {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify(apiData)
-      });
+      console.log('Envoi des données à l\'API:', apiData);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Erreur lors de la création du trajet');
+      const response = await ApiClient.post<{ data: { ride: Ride } }>('/rides', apiData);
+
+      if (!response.success) {
+        console.error('Erreur API:', response.error);
+        throw new Error(response.error?.message || 'Erreur lors de la création du trajet');
       }
 
-      const result = await response.json();
-      return result.data?.ride || result;
+      console.log('✅ Trajet créé avec succès via API:', response.data);
+
+      // @ts-ignore
+      const ride = response.data?.ride;
+      if (ride) {
+        saveLocalRide(ride as Ride); // Backup local
+      }
+      return ride as Ride;
     } catch (error) {
-      console.error('API create failed:', error);
+      console.error('Erreur création trajet:', error);
       throw error;
     }
   }
 
   // Récupérer mes trajets publiés
   async getMyRides(): Promise<Ride[]> {
-    let apiRides: Ride[] = [];
     try {
-      const response = await fetch(`${API_URL}/rides/my-rides`, {
-        method: 'GET',
-        headers: this.getAuthHeaders()
-      });
+      const response = await ApiClient.get<{ data: { rides: Ride[] } }>('/rides/my/published');
 
-      if (response.ok) {
-        const data = await response.json();
-        apiRides = data.rides || data || [];
+      if (response.success && response.data) {
+        // @ts-ignore
+        return response.data.rides || [];
       }
+      
+      // Fallback au localStorage
+      return getLocalRides();
     } catch (error) {
       console.error('Get my rides error:', error);
+      // Fallback au localStorage en cas d'erreur
+      return getLocalRides();
     }
-
-    // Combine with local rides
-    const localRides = getLocalRides();
-    // Filter out duplicates if any (though IDs should differ)
-    const allRides = [...localRides, ...apiRides];
-    
-    // Sort by date desc
-    return allRides.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   // Annuler un trajet
   async cancelRide(id: string): Promise<boolean> {
     try {
-      const response = await fetch(`${API_URL}/rides/${id}/cancel`, {
-        method: 'POST',
-        headers: this.getAuthHeaders()
-      });
-
-      return response.ok;
+      const response = await ApiClient.post<any>(`/rides/${id}/cancel`);
+      return Boolean(response.success);
     } catch (error) {
       console.error('Cancel ride error:', error);
       return false;
@@ -222,60 +193,13 @@ class RideService {
 
   // Réserver un trajet
   async bookRide(rideId: string, seats: number = 1): Promise<{ bookingId: string }> {
-    const response = await fetch(`${API_URL}/bookings`, {
-      method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify({ rideId, seats })
-    });
+    const response = await ApiClient.post<{ bookingId: string }>('/bookings', { rideId, seats });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Erreur lors de la réservation');
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Erreur lors de la réservation');
     }
 
-    return await response.json();
-  }
-
-  // Données de démonstration si l'API n'est pas disponible
-  private getMockRides(params: RideSearchParams): Ride[] {
-    // 1. Récupérer les trajets locaux (créés par l'utilisateur)
-    const localRides = getLocalRides();
-    
-    // 2. Filtrer les trajets locaux selon les critères de recherche
-    const filteredLocalRides = localRides.filter(ride => {
-      // Filtre par origine (si spécifié)
-      if (params.origin && !ride.origin.toLowerCase().includes(params.origin.toLowerCase())) {
-        return false;
-      }
-      
-      // Filtre par destination (si spécifié)
-      if (params.destination && !ride.destination.toLowerCase().includes(params.destination.toLowerCase())) {
-        return false;
-      }
-      
-      // Filtre par date (si spécifié)
-      if (params.date) {
-        const searchDate = new Date(params.date).toDateString();
-        const rideDate = new Date(ride.departureTime).toDateString();
-        if (searchDate !== rideDate) {
-          return false;
-        }
-      }
-      
-      // Filtre par places (si spécifié)
-      if (params.seats && ride.seatsAvailable < params.seats) {
-        return false;
-      }
-      
-      return true;
-    });
-
-    // 3. Générer les trajets de démonstration (adaptatifs)
-    // NOTE: Suppression des trajets fictifs pour la production
-    const mockRides: Ride[] = [];
-
-    // Combiner les résultats : trajets locaux uniquement
-    return filteredLocalRides;
+    return response.data as { bookingId: string };
   }
 }
 

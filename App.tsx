@@ -317,11 +317,11 @@ const SearchForm: React.FC<{
   );
 };
 
-const RideCard: React.FC<{ 
-  ride: Ride, 
+const RideCard: React.FC<{
+  ride: Ride,
   onClick: () => void,
   onBook?: () => void,
-  onContact?: () => void 
+  onContact?: () => void
 }> = ({ ride, onClick, onBook, onContact }) => {
   const departureDate = new Date(ride.departureTime);
   const timeString = departureDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -394,22 +394,22 @@ const RideCard: React.FC<{
             </div>
           </div>
         </div>
-        
+
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
             <span className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full font-medium">
               {ride.seatsAvailable} place{ride.seatsAvailable > 1 ? 's' : ''}
             </span>
           </div>
-          
+
           <div className="flex gap-2 mt-1">
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); onContact && onContact(); }}
               className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
             >
               Contacter
             </button>
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); onBook && onBook(); }}
               className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
             >
@@ -715,23 +715,24 @@ const PublishForm: React.FC<{
       const departureTime = `${formData.date}T${formData.time}:00`;
 
       let driverInfo;
-      if (!isAuthenticated && formData.driverName) {
+      if (!isAuthenticated && formData.driverName && formData.driverPhone) {
         // Create guest user session
         const guestUser = {
           id: 'guest_' + Date.now(),
           firstName: formData.driverName.split(' ')[0],
           lastName: formData.driverName.split(' ').slice(1).join(' ') || '',
           name: formData.driverName,
+          phone: formData.driverPhone,
           isVerified: false,
           rating: 5,
           reviewCount: 0,
-          avatarUrl: `https://ui-avatars.com/api/?name=${formData.driverName}&background=10b981&color=fff`
+          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.driverName)}&background=10b981&color=fff`
         };
         login(guestUser);
         driverInfo = guestUser;
       }
 
-      await rideService.createRide({
+      const rideData = {
         origin: formData.origin,
         destination: formData.destination,
         departureTime,
@@ -741,12 +742,19 @@ const PublishForm: React.FC<{
         description: formData.description,
         features: formData.features,
         driver: driverInfo
-      });
-      
+      };
+
+      console.log('Données du trajet à envoyer:', rideData);
+
+      const createdRide = await rideService.createRide(rideData);
+      console.log('Trajet créé avec succès:', createdRide);
+
+      setPublishedSuccess(true);
       onPublish(formData);
     } catch (error) {
       console.error('Erreur création trajet:', error);
-      alert('Erreur lors de la publication du trajet');
+      const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la publication du trajet';
+      alert(`Erreur: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -836,275 +844,275 @@ const PublishForm: React.FC<{
         )}
 
         <div className="grid gap-6 lg:grid-cols-[1.7fr_1fr]">
-        <div className="space-y-6">
-          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Itinéraire</p>
-                <h2 className="text-2xl font-bold text-gray-900 mt-2">Points de départ et d'arrivée</h2>
+          <div className="space-y-6">
+            <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Itinéraire</p>
+                  <h2 className="text-2xl font-bold text-gray-900 mt-2">Points de départ et d'arrivée</h2>
+                </div>
+                <span className="text-xs font-semibold text-gray-400">1/3</span>
               </div>
-              <span className="text-xs font-semibold text-gray-400">1/3</span>
-            </div>
-            <div className="grid gap-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">Lieu de départ*</label>
-                <PublishCityInput
-                  value={formData.origin}
-                  onChange={(val) => handleChange('origin', val)}
-                  placeholder="Ex: Dakar, Liberté 6"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">Lieu d'arrivée*</label>
-                <PublishCityInput
-                  value={formData.destination}
-                  onChange={(val) => handleChange('destination', val)}
-                  placeholder="Ex: Saint-Louis, Gare routière"
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Horaires & véhicule</p>
-                <h2 className="text-2xl font-bold text-gray-900 mt-2">Quand partez-vous ?</h2>
-              </div>
-              <span className="text-xs font-semibold text-gray-400">2/3</span>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">Date*</label>
-                <input
-                  type="date"
-                  value={formData.date}
-                  min={minDate}
-                  onChange={(e) => handleChange('date', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">Heure*</label>
-                <input
-                  type="time"
-                  value={formData.time}
-                  onChange={(e) => handleChange('time', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-2">Véhicule</label>
-              <input
-                type="text"
-                value={formData.carModel}
-                onChange={(e) => handleChange('carModel', e.target.value)}
-                placeholder="Ex: Peugeot 308, Toyota Corolla..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-              />
-            </div>
-          </section>
-
-          {!isAuthenticated && (
-            <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <Icons.User size={18} />
+              <div className="grid gap-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">Lieu de départ*</label>
+                  <PublishCityInput
+                    value={formData.origin}
+                    onChange={(val) => handleChange('origin', val)}
+                    placeholder="Ex: Dakar, Liberté 6"
+                  />
                 </div>
                 <div>
-                  <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Coordonnées</p>
-                  <h2 className="text-xl font-bold text-gray-900">Présentez-vous aux passagers</h2>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">Lieu d'arrivée*</label>
+                  <PublishCityInput
+                    value={formData.destination}
+                    onChange={(val) => handleChange('destination', val)}
+                    placeholder="Ex: Saint-Louis, Gare routière"
+                  />
                 </div>
+              </div>
+            </section>
+
+            <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Horaires & véhicule</p>
+                  <h2 className="text-2xl font-bold text-gray-900 mt-2">Quand partez-vous ?</h2>
+                </div>
+                <span className="text-xs font-semibold text-gray-400">2/3</span>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">Nom complet*</label>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">Date*</label>
                   <input
-                    type="text"
-                    value={formData.driverName || ''}
-                    onChange={(e) => handleChange('driverName', e.target.value)}
-                    placeholder="Ex: Moussa Diop"
+                    type="date"
+                    value={formData.date}
+                    min={minDate}
+                    onChange={(e) => handleChange('date', e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                    required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">
-                    Téléphone / WhatsApp*
-                    <span className="ml-2 text-xs text-emerald-600">📱 Lien WhatsApp auto</span>
-                  </label>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">Heure*</label>
                   <input
-                    type="tel"
-                    value={formData.driverPhone || ''}
-                    onChange={(e) => handleChange('driverPhone', e.target.value)}
-                    placeholder="Ex: 221771234567 (avec indicatif +221)"
+                    type="time"
+                    value={formData.time}
+                    onChange={(e) => handleChange('time', e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                    required
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    👉 Format: 221XXXXXXXXX (ex: 221771234567). Les passagers pourront vous contacter directement sur WhatsApp!
-                  </p>
                 </div>
               </div>
-              <p className="text-sm text-gray-500">Ces informations ne sont visibles que par les passagers intéressés. Elles permettent de vous contacter rapidement.</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">Véhicule</label>
+                <input
+                  type="text"
+                  value={formData.carModel}
+                  onChange={(e) => handleChange('carModel', e.target.value)}
+                  placeholder="Ex: Peugeot 308, Toyota Corolla..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
             </section>
-          )}
 
-          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Confort & infos</p>
-                <h2 className="text-2xl font-bold text-gray-900 mt-2">Personnalisez votre offre</h2>
+            {!isAuthenticated && (
+              <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <Icons.User size={18} />
+                  </div>
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Coordonnées</p>
+                    <h2 className="text-xl font-bold text-gray-900">Présentez-vous aux passagers</h2>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">Nom complet*</label>
+                    <input
+                      type="text"
+                      value={formData.driverName || ''}
+                      onChange={(e) => handleChange('driverName', e.target.value)}
+                      placeholder="Ex: Moussa Diop"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      Téléphone / WhatsApp*
+                      <span className="ml-2 text-xs text-emerald-600">📱 Lien WhatsApp auto</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.driverPhone || ''}
+                      onChange={(e) => handleChange('driverPhone', e.target.value)}
+                      placeholder="Ex: 221771234567 (avec indicatif +221)"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      👉 Format: 221XXXXXXXXX (ex: 221771234567). Les passagers pourront vous contacter directement sur WhatsApp!
+                    </p>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500">Ces informations ne sont visibles que par les passagers intéressés. Elles permettent de vous contacter rapidement.</p>
+              </section>
+            )}
+
+            <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Confort & infos</p>
+                  <h2 className="text-2xl font-bold text-gray-900 mt-2">Personnalisez votre offre</h2>
+                </div>
+                <span className="text-xs font-semibold text-gray-400">3/3</span>
               </div>
-              <span className="text-xs font-semibold text-gray-400">3/3</span>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-3">Options disponibles</label>
-              <div className="flex flex-wrap gap-2">
-                {featureOptions.map(opt => {
-                  const isSelected = formData.features.includes(opt);
-                  return (
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-3">Options disponibles</label>
+                <div className="flex flex-wrap gap-2">
+                  {featureOptions.map(opt => {
+                    const isSelected = formData.features.includes(opt);
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          const newFeatures = isSelected
+                            ? formData.features.filter(f => f !== opt)
+                            : [...formData.features, opt];
+                          handleChange('features', newFeatures);
+                        }}
+                        className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${isSelected
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-inner'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                          }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">Message aux passagers</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => handleChange('description', e.target.value)}
+                  placeholder="Dites-en plus sur vos habitudes de conduite, vos préférences ou un point de rendez-vous précis."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none h-28 resize-none"
+                />
+              </div>
+            </section>
+          </div>
+
+          <div className="space-y-6 lg:sticky lg:top-24">
+
+
+            <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Tarification</p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-2">Ajustez vos conditions</h3>
+              </div>
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">Prix par passager</p>
+                    <p className="text-3xl font-extrabold text-emerald-600">{formData.price.toLocaleString('fr-FR')} XOF</p>
+                  </div>
+                  <div className="flex items-center gap-3">
                     <button
-                      key={opt}
                       type="button"
-                      onClick={() => {
-                        const newFeatures = isSelected
-                          ? formData.features.filter(f => f !== opt)
-                          : [...formData.features, opt];
-                        handleChange('features', newFeatures);
-                      }}
-                      className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${isSelected
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-inner'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                        }`}
+                      onClick={() => handleChange('price', Math.max(500, formData.price - 500))}
+                      className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
                     >
-                      {opt}
+                      -
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-2">Message aux passagers</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => handleChange('description', e.target.value)}
-                placeholder="Dites-en plus sur vos habitudes de conduite, vos préférences ou un point de rendez-vous précis."
-                className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none h-28 resize-none"
-              />
-            </div>
-          </section>
-        </div>
-
-        <div className="space-y-6 lg:sticky lg:top-24">
-
-
-          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Tarification</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-2">Ajustez vos conditions</h3>
-            </div>
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => handleChange('price', formData.price + 500)}
+                      className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
                 <div>
-                  <p className="text-sm text-gray-500">Prix par passager</p>
-                  <p className="text-3xl font-extrabold text-emerald-600">{formData.price.toLocaleString('fr-FR')} XOF</p>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">Saisir votre tarif</label>
+                  <div className="flex items-center rounded-2xl border-2 border-gray-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 overflow-hidden transition-all">
+                    <span className="px-4 py-3 text-gray-500 bg-gray-50 border-r border-gray-100 font-semibold">XOF</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={formData.price}
+                      onChange={(e) => { const value = e.target.value.replace(/[^0-9]/g, ''); handleChange('price', value === '' ? 0 : parseInt(value, 10)); }}
+                      onBlur={(e) => {
+                        const value = Number(e.target.value);
+                        if (!value || value < 1) {
+                          handleChange('price', 500);
+                        }
+                      }}
+                      placeholder="Ex: 2500"
+                      className="w-full px-4 py-3 text-2xl font-bold text-emerald-600 bg-white focus:outline-none"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Les voyageurs apprécient les tarifs clairs.  Tapez librement le tarif de votre choix.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleChange('price', Math.max(500, formData.price - 500))}
-                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
-                  >
-                    -
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleChange('price', formData.price + 500)}
-                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">Saisir votre tarif</label>
-                <div className="flex items-center rounded-2xl border-2 border-gray-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 overflow-hidden transition-all">
-                  <span className="px-4 py-3 text-gray-500 bg-gray-50 border-r border-gray-100 font-semibold">XOF</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={formData.price}
-                    onChange={(e) => { const value = e.target.value.replace(/[^0-9]/g, ''); handleChange('price', value === '' ? 0 : parseInt(value, 10)); }}
-                    onBlur={(e) => {
-                      const value = Number(e.target.value);
-                      if (!value || value < 1) {
-                        handleChange('price', 500);
-                      }
-                    }}
-                    placeholder="Ex: 2500"
-                    className="w-full px-4 py-3 text-2xl font-bold text-emerald-600 bg-white focus:outline-none"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Les voyageurs apprécient les tarifs clairs.  Tapez librement le tarif de votre choix.</p>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Places disponibles</p>
-                  <p className="text-3xl font-extrabold text-gray-900">{formData.seats}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleChange('seats', Math.max(1, formData.seats - 1))}
-                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
-                  >
-                    -
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleChange('seats', Math.min(7, formData.seats + 1))}
-                    className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
-                  >
-                    +
-                  </button>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">Places disponibles</p>
+                    <p className="text-3xl font-extrabold text-gray-900">{formData.seats}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleChange('seats', Math.max(1, formData.seats - 1))}
+                      className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
+                    >
+                      -
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleChange('seats', Math.min(7, formData.seats + 1))}
+                      className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="pt-4 border-t border-gray-100 space-y-3">
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting || !isFormValid}
-                className="w-full py-4 rounded-2xl font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 shadow-lg hover:shadow-2xl hover:from-emerald-700 hover:to-emerald-600 transform hover:scale-[1.02] active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Publication...
-                  </>
-                ) : (
-                  <>
-                    <Icons.CheckCircle size={18} />
-                    Publier le trajet
-                  </>
-                )}
-              </button>
-              <button
-                onClick={onCancel}
-                className="w-full py-3 rounded-2xl font-semibold text-gray-500 hover:text-gray-900 border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all transform active:scale-95"
-              >
-                Annuler
-              </button>
-              <p className="text-xs text-gray-400 text-center">
-                En publiant, vous acceptez les conditions SUNU YOON et vous engagez à honorer votre trajet.
-              </p>
-            </div>
-          </section>
+              <div className="pt-4 border-t border-gray-100 space-y-3">
+                <button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !isFormValid}
+                  className="w-full py-4 rounded-2xl font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 shadow-lg hover:shadow-2xl hover:from-emerald-700 hover:to-emerald-600 transform hover:scale-[1.02] active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Publication...
+                    </>
+                  ) : (
+                    <>
+                      <Icons.CheckCircle size={18} />
+                      Publier le trajet
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={onCancel}
+                  className="w-full py-3 rounded-2xl font-semibold text-gray-500 hover:text-gray-900 border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all transform active:scale-95"
+                >
+                  Annuler
+                </button>
+                <p className="text-xs text-gray-400 text-center">
+                  En publiant, vous acceptez les conditions SUNU YOON et vous engagez à honorer votre trajet.
+                </p>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
-    </div>
     </div>
   );
 };
@@ -1127,7 +1135,7 @@ const ProfileView: React.FC<{
     try {
       const rides = await rideService.getMyRides();
       setMyRides(rides.map(mapApiRideToRide));
-      
+
       const bookings = await bookingService.getMyBookings();
       setMyBookings(bookings);
 
@@ -1329,11 +1337,10 @@ const ProfileView: React.FC<{
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
-                        booking.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' :
-                        booking.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                        'bg-yellow-100 text-yellow-700'
-                      }`}>
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${booking.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' :
+                          booking.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'
+                        }`}>
                         {booking.status === 'confirmed' ? 'Confirmé' : booking.status === 'cancelled' ? 'Annulé' : 'En attente'}
                       </span>
                       <span className="text-gray-400 text-xs">#{booking.id.slice(-6)}</span>
@@ -1361,7 +1368,7 @@ const ProfileView: React.FC<{
                         <div className="text-xs text-gray-500">Conducteur</div>
                       </div>
                     </div>
-                    
+
                     {booking.status === 'confirmed' && booking.ride.driver.phone && (
                       <div className="flex gap-2">
                         <a
@@ -1379,7 +1386,7 @@ const ProfileView: React.FC<{
                           title="WhatsApp"
                         >
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
                           </svg>
                         </a>
                       </div>
@@ -1412,6 +1419,7 @@ function AppContent() {
   const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [recentRides, setRecentRides] = useState<Ride[]>([]);
+  const [homeRefreshKey, setHomeRefreshKey] = useState(0);
 
   // Scroll to top on view change
   useEffect(() => {
@@ -1423,8 +1431,10 @@ function AppContent() {
     if (currentView === 'home') {
       const loadRecentRides = async () => {
         try {
+          console.log('Chargement des trajets récents...');
           // Fetch rides with empty params to get all/recent
           const rides = await rideService.searchRides({});
+          console.log(`${rides.length} trajet(s) chargé(s)`);
           setRecentRides(rides.slice(0, 3).map(mapApiRideToRide));
         } catch (error) {
           console.error('Error loading recent rides:', error);
@@ -1432,7 +1442,7 @@ function AppContent() {
       };
       loadRecentRides();
     }
-  }, [currentView]);
+  }, [currentView, homeRefreshKey]);
 
   // Modals
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -1547,10 +1557,28 @@ function AppContent() {
   };
 
   const handlePublishRide = async (draft: DraftRide) => {
-    // Le trajet est déjà créé dans PublishForm via l'API
-    // Forcer le rechargement des trajets
-    setProfileRefreshKey(prev => prev + 1);
-    setCurrentView('profile');
+    console.log('Trajet publié, rafraîchissement de la liste...');
+    
+    // Forcer le rechargement de la page d'accueil
+    setHomeRefreshKey(prev => prev + 1);
+    
+    // 1. Recharger les trajets récents
+    try {
+      const rides = await rideService.searchRides({});
+      console.log(`${rides.length} trajet(s) disponible(s) après publication`);
+      setRecentRides(rides.slice(0, 3).map(mapApiRideToRide));
+    } catch (e) {
+      console.error("Erreur rechargement trajets:", e);
+    }
+
+    // 2. Rediriger
+    if (isAuthenticated) {
+      setProfileRefreshKey(prev => prev + 1);
+      setCurrentView('profile');
+    } else {
+      // Si pas connecté (guest), aller à l'accueil
+      setCurrentView('home');
+    }
   };
 
   const handleBookingSuccess = (bookingId: string) => {
@@ -1640,7 +1668,7 @@ function AppContent() {
                 </button>
                 <p className="text-sm text-gray-500 md:ml-4">Publiez gratuitement, aucune inscription nécessaire.</p>
               </div>
-              
+
               <div className="mb-12">
                 <SearchForm
                   onSearch={handleSearch}
@@ -1655,7 +1683,7 @@ function AppContent() {
                 <div className="max-w-6xl mx-auto mb-16">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold text-gray-900">Trajets récents</h2>
-                    <button 
+                    <button
                       onClick={() => setCurrentView('search')}
                       className="text-emerald-600 font-semibold hover:text-emerald-700 flex items-center gap-1"
                     >
@@ -1664,9 +1692,9 @@ function AppContent() {
                   </div>
                   <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {recentRides.map(ride => (
-                      <RideCard 
-                        key={ride.id} 
-                        ride={ride} 
+                      <RideCard
+                        key={ride.id}
+                        ride={ride}
                         onClick={() => handleRideClick(ride)}
                         onBook={() => {
                           setSelectedRide(ride);
@@ -1890,9 +1918,9 @@ function AppContent() {
               ) : (
                 <div className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
                   {searchResults.map(ride => (
-                    <RideCard 
-                      key={ride.id} 
-                      ride={ride} 
+                    <RideCard
+                      key={ride.id}
+                      ride={ride}
                       onClick={() => handleRideClick(ride)}
                       onBook={() => {
                         setSelectedRide(ride);

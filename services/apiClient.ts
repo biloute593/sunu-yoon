@@ -1,5 +1,5 @@
 // Configuration de l'API
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 const API_TIMEOUT = 15000; // 15 secondes
 
 // Helper pour ajouter timeout aux fetch

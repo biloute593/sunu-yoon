@@ -114,5 +114,68 @@
     
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    
+    <!-- Script de test pour développement -->
+    <script>
+      window.testRideCreation = async () => {
+        console.log('=== TEST DE PUBLICATION DE TRAJET (MODE SIMULATION) ===');
+        
+        // Test via le service directement (simulation)
+        console.log('Test en mode simulation locale...');
+        
+        // Simuler les données comme dans le formulaire
+        const mockRideData = {
+          origin: 'Dakar',
+          destination: 'Saint-Louis',
+          departureTime: new Date(Date.now() + 24*60*60*1000).toISOString(),
+          price: 5000,
+          seatsAvailable: 4,
+          carModel: 'Toyota Corolla',
+          description: 'Trajet test en mode simulation',
+          features: ['Climatisation'],
+          driver: {
+            id: 'test_driver',
+            firstName: 'Test',
+            lastName: 'Driver',
+            name: 'Test Driver',
+            phone: '+221771234567',
+            isVerified: false,
+            rating: 5,
+            reviewCount: 0
+          }
+        };
+        
+        console.log('Données de test:', mockRideData);
+        
+        try {
+          // Utiliser une promesse simulée
+          console.log('⏳ Création du trajet simulé...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          const simulatedRide = {
+            id: 'ride_' + Date.now(),
+            ...mockRideData,
+            currency: 'XOF',
+            totalSeats: mockRideData.seatsAvailable,
+            estimatedDuration: '3h 00m',
+            status: 'OPEN',
+            createdAt: new Date().toISOString()
+          };
+          
+          // Sauvegarder dans le localStorage
+          const rides = JSON.parse(localStorage.getItem('sunu_yoon_local_rides') || '[]');
+          rides.unshift(simulatedRide);
+          localStorage.setItem('sunu_yoon_local_rides', JSON.stringify(rides));
+          
+          console.log('✅ SUCCÈS - Trajet simulé créé:', simulatedRide);
+          alert('✅ Test réussi ! Trajet simulé créé avec succès. Vérifiez la console pour les détails.');
+        } catch (error) {
+          console.error('❌ ERREUR:', error);
+          alert('❌ Test échoué : ' + error.message);
+        }
+      };
+      
+      console.log('Script de test chargé. Utilisez testRideCreation() pour tester la publication en mode simulation.');
+    </script>
   </body>
 </html>

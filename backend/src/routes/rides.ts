@@ -6,6 +6,9 @@ import { AuthRequest, authMiddleware, optionalAuth } from '../middleware/auth';
 
 const router = Router();
 
+// Fallback in-memory store for demo purposes when DB is not connected
+const memoryRides: any[] = [];
+
 // ============ RECHERCHER DES TRAJETS (PUBLIC) ============
 router.get('/search',
   query('origin').notEmpty().withMessage('Ville de départ requise'),
@@ -27,64 +30,75 @@ router.get('/search',
       };
       const minSeats = seats ? parseInt(seats, 10) : 1;
 
-      // Construire la requête
-      const whereClause: any = {
-        status: 'OPEN',
-        availableSeats: { gte: minSeats },
-        originCity: { contains: origin as string, mode: 'insensitive' },
-        destinationCity: { contains: destination as string, mode: 'insensitive' }
-      };
-
-      // Filtrer par date si fournie
-      if (date) {
-        const searchDate = new Date(date as string);
-        const nextDay = new Date(searchDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-        
-        whereClause.departureTime = {
-          gte: searchDate,
-          lt: nextDay
+      let rides = [];
+      try {
+        // Construire la requête
+        const whereClause: any = {
+          status: 'OPEN',
+          availableSeats: { gte: minSeats },
+          originCity: { contains: origin as string, mode: 'insensitive' },
+          destinationCity: { contains: destination as string, mode: 'insensitive' }
         };
-      } else {
-        // Par défaut, trajets futurs uniquement
-        whereClause.departureTime = { gte: new Date() };
-      }
 
-      const rides = await prisma.ride.findMany({
-        where: whereClause,
-        include: {
-          driver: {
-            select: {
-              id: true,
-              name: true,
-              avatarUrl: true,
-              rating: true,
-              reviewCount: true,
-              isVerified: true
+        // Filtrer par date si fournie
+        if (date) {
+          const searchDate = new Date(date as string);
+          const nextDay = new Date(searchDate);
+          nextDay.setDate(nextDay.getDate() + 1);
+
+          whereClause.departureTime = {
+            gte: searchDate,
+            lt: nextDay
+          };
+        } else {
+          // Par défaut, trajets futurs uniquement
+          whereClause.departureTime = { gte: new Date() };
+        }
+
+        rides = await prisma.ride.findMany({
+          where: whereClause,
+          include: {
+            driver: {
+              select: {
+                id: true,
+                name: true,
+                avatarUrl: true,
+                rating: true,
+                reviewCount: true,
+                isVerified: true
+              }
             }
-          }
-        },
-        orderBy: { departureTime: 'asc' },
-        take: 20
-      });
+          },
+          orderBy: { departureTime: 'asc' },
+          take: 20
+        });
+      } catch (dbError) {
+        console.warn('Database error, using memory store:', dbError);
+        // Fallback to memory store filtering
+        rides = memoryRides.filter(r =>
+          r.originCity.toLowerCase().includes(origin.toLowerCase()) &&
+          r.destinationCity.toLowerCase().includes(destination.toLowerCase()) &&
+          r.availableSeats >= minSeats
+        );
+      }
 
       res.json({
         success: true,
         data: {
           rides: rides.map(ride => ({
             id: ride.id,
-            driver: ride.driver,
+            driver: ride.driver || { name: 'Chauffeur', rating: 5, reviewCount: 0 },
             origin: ride.originCity,
             originAddress: ride.originAddress,
             destination: ride.destinationCity,
             destinationAddress: ride.destinationAddress,
-            departureTime: ride.departureTime.toISOString(),
+            departureTime: new Date(ride.departureTime).toISOString(),
             duration: `${Math.floor(ride.estimatedDuration / 60)}h ${ride.estimatedDuration % 60}m`,
             price: ride.pricePerSeat,
             currency: ride.currency,
             seatsAvailable: ride.availableSeats,
             totalSeats: ride.totalSeats,
-            carModel: ride.driver.name, // À remplacer par les infos véhicule
+            carModel: ride.driver?.name || 'Véhicule', // À remplacer par les infos véhicule
             features: ride.features,
             description: ride.description
           })),
@@ -177,23 +191,30 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res, next) => {
   }
 });
 
-// ============ CRÉER UN TRAJET (AUTHENTIFIÉ) ============
+// ============ CRÉER UN TRAJET (AUTHENTIFIÉ OU INVITÉ) ============
 router.post('/',
-  authMiddleware,
+  optionalAuth,
   body('originCity').notEmpty().withMessage('Ville de départ requise'),
   body('destinationCity').notEmpty().withMessage('Ville de destination requise'),
   body('departureTime').isISO8601().withMessage('Date de départ invalide'),
   body('pricePerSeat').isInt({ min: 500 }).withMessage('Prix minimum: 500 FCFA'),
   body('totalSeats').isInt({ min: 1, max: 8 }).withMessage('Nombre de places invalide (1-8)'),
+  body('availableSeats').optional().isInt({ min: 1, max: 8 }).withMessage('Nombre de places disponibles invalide'),
   body('features').optional().isArray().withMessage('Features doit être un tableau'),
+  body('description').optional().isString().withMessage('Description doit être une chaîne'),
+  body('estimatedDuration').optional().isInt().withMessage('Durée estimée doit être un nombre'),
+  body('distance').optional().isNumeric().withMessage('Distance doit être un nombre'),
+  body('driverName').optional().isString().withMessage('Nom du conducteur doit être une chaîne'),
+  body('driverPhone').optional().isString().withMessage('Téléphone du conducteur doit être une chaîne'),
   async (req: AuthRequest, res, next) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.error('Validation errors:', errors.array());
         throw new AppError(errors.array()[0].msg, 400);
       }
 
-      const userId = req.user!.id;
+      let userId = req.user?.id;
       const {
         originCity,
         originAddress,
@@ -208,53 +229,119 @@ router.post('/',
         distance,
         pricePerSeat,
         totalSeats,
+        availableSeats,
         features,
-        description
+        description,
+        // Champs pour invités
+        driverName,
+        driverPhone
       } = req.body;
+
+      console.log('Données reçues pour création de trajet:', {
+        userId,
+        originCity,
+        destinationCity,
+        departureTime,
+        pricePerSeat,
+        totalSeats,
+        availableSeats,
+        driverName,
+        driverPhone
+      });
+
+      // Si pas connecté, on doit avoir nom et téléphone
+      if (!userId) {
+        if (!driverName || !driverPhone) {
+          throw new AppError('Nom et téléphone requis pour la publication sans compte', 400);
+        }
+
+        // Normaliser le téléphone
+        let phone = driverPhone.replace(/^\+?221/, '').replace(/\s/g, '');
+        phone = `+221${phone}`;
+
+        // Chercher ou créer l'utilisateur
+        let user = await prisma.user.findUnique({ where: { phone } });
+
+        if (!user) {
+          // Extraire Prénom/Nom
+          const nameParts = driverName.trim().split(' ');
+          const firstName = nameParts[0];
+          const lastName = nameParts.slice(1).join(' ') || '';
+
+          // Créer un utilisateur "invité"
+          const passwordHash = await import('bcryptjs').then(b => b.hash('pass_' + Math.random().toString(36), 10));
+
+          user = await prisma.user.create({
+            data: {
+              phone,
+              name: driverName,
+              firstName,
+              lastName: lastName || undefined,
+              passwordHash,
+              isVerified: false,
+              avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(driverName)}&background=10b981&color=fff`
+            }
+          });
+        }
+        userId = user.id;
+      }
 
       // Vérifier que la date est dans le futur
       if (new Date(departureTime) < new Date()) {
         throw new AppError('La date de départ doit être dans le futur', 400);
       }
 
-      // Marquer l'utilisateur comme conducteur
-      await prisma.user.update({
-        where: { id: userId },
-        data: { isDriver: true }
-      });
+      let ride;
+      try {
+        // Marquer l'utilisateur comme conducteur
+        await prisma.user.update({
+          where: { id: userId },
+          data: { isDriver: true }
+        });
 
-      const ride = await prisma.ride.create({
-        data: {
-          driverId: userId,
-          originCity,
-          originAddress,
-          originLat,
-          originLng,
-          destinationCity,
-          destinationAddress,
-          destinationLat,
-          destinationLng,
-          departureTime: new Date(departureTime),
-          estimatedDuration: estimatedDuration || 180, // 3h par défaut
-          distance,
-          pricePerSeat,
-          totalSeats,
-          availableSeats: totalSeats,
-          features: features || [],
-          description
-        },
-        include: {
-          driver: {
-            select: {
-              id: true,
-              name: true,
-              avatarUrl: true,
-              rating: true,
-              isVerified: true
+        ride = await prisma.ride.create({
+          data: {
+            driverId: userId!,
+            originCity,
+            originAddress: originAddress || originCity,
+            originLat,
+            originLng,
+            destinationCity,
+            destinationAddress: destinationAddress || destinationCity,
+            destinationLat,
+            destinationLng,
+            departureTime: new Date(departureTime),
+            estimatedDuration: estimatedDuration || 180,
+            distance: distance || 0,
+            pricePerSeat,
+            totalSeats,
+            availableSeats: req.body.availableSeats || totalSeats,
+            features: features || [],
+            description: description || ''
+          },
+          include: {
+            driver: {
+              select: {
+                id: true,
+                name: true,
+                avatarUrl: true,
+                rating: true,
+                isVerified: true
+              }
             }
           }
-        }
-      });
+        });
+      } catch (dbError) {
+        console.error('Database error during ride creation:', dbError);
+        console.error('Error details:', {
+          message: dbError.message,
+          stack: dbError.stack,
+          code: dbError.code
+        });
+        throw new AppError('Erreur lors de la création du trajet en base de données: ' + dbError.message, 500);
+      }
+
+      console.log('Trajet créé avec succès:', ride.id);
 
       res.status(201).json({
         success: true,
@@ -262,6 +349,7 @@ router.post('/',
         data: { ride }
       });
     } catch (error) {
+      console.error('Erreur générale lors de la création du trajet:', error);
       next(error);
     }
   }

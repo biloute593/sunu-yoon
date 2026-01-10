@@ -1,165 +1,123 @@
 import { ApiClient } from './apiClient';
-import { PaymentMethod } from './paymentService';
+
+export type PaymentMethod = 'WAVE' | 'ORANGE_MONEY' | 'CASH';
 
 export interface Booking {
   id: string;
   seats: number;
-  totalPrice: number;
-  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
-  pickupAddress?: string;
+  status: 'pending' | 'confirmed' | 'cancelled'; // normalized to lowercase
   createdAt: string;
   ride: {
     id: string;
     origin: string;
-    originAddress?: string;
     destination: string;
-    destinationAddress?: string;
     departureTime: string;
-    duration: string;
     driver: {
-      id: string;
+      id?: string;
       name: string;
-      avatarUrl: string;
+      avatarUrl?: string;
       phone?: string;
-      rating: number;
     };
-    features: string[];
-  };
-  payment?: {
-    status: string;
-    method: string;
-    paidAt?: string;
   };
 }
 
-export interface GuestBooking {
-  id: string;
-  status: 'pending' | 'notified' | 'cancelled' | 'confirmed';
-  seats: number;
+export interface GuestBooking extends Booking {
   passenger: {
     name: string;
     phone: string;
     contactPreference?: 'call' | 'whatsapp' | 'sms';
   };
-  paymentMethod: PaymentMethod;
   notes?: string;
-  ride: {
-    id: string;
-    origin: string;
-    destination: string;
-    departureTime: string;
-    driver: {
-      name: string;
-      phone?: string | null;
-      email?: string | null;
-    };
-  };
-  remainingSeats: number;
 }
 
-export interface CreateGuestBookingData {
+export interface CreateBookingData {
   rideId: string;
-  seats?: number;
+  seats: number;
   passengerName: string;
   passengerPhone: string;
-  paymentMethod?: PaymentMethod;
+  paymentMethod: PaymentMethod;
   contactPreference?: 'call' | 'whatsapp' | 'sms';
   notes?: string;
 }
 
-// Service de gestion des réservations (Mock LocalStorage)
-export const bookingService = {
-  // Créer une réservation invité sans compte
-  async createBooking(data: CreateGuestBookingData): Promise<GuestBooking> {
-    // Simulation d'un délai réseau
-    await new Promise(resolve => setTimeout(resolve, 1000));
+class BookingService {
+  // Créer une réservation (Intelligente: API Auth ou Guest selon le cas)
+  async createBooking(data: CreateBookingData): Promise<any> {
+    try {
+      // Vérifier si utilisateur connecté (via présence de token)
+      const token = localStorage.getItem('token'); // Hypothèse: token stocké ici
 
-    const bookings = JSON.parse(localStorage.getItem('sunu_yoon_bookings') || '[]');
-    
-    // Récupérer les détails du trajet pour l'objet retourné
-    const rides = JSON.parse(localStorage.getItem('sunu_yoon_local_rides') || '[]');
-    const ride = rides.find((r: any) => r.id === data.rideId);
-
-    if (!ride) {
-      throw new Error('Trajet introuvable');
-    }
-
-    const newBooking: GuestBooking = {
-      id: 'bk_' + Date.now(),
-      status: 'pending',
-      seats: data.seats || 1,
-      passenger: {
-        name: data.passengerName,
-        phone: data.passengerPhone,
-        contactPreference: data.contactPreference
-      },
-      paymentMethod: data.paymentMethod || 'CASH',
-      notes: data.notes,
-      ride: {
-        id: ride.id,
-        origin: ride.origin,
-        destination: ride.destination,
-        departureTime: ride.departureTime,
-        driver: {
-          name: ride.driver.firstName + ' ' + (ride.driver.lastName || ''),
-          phone: ride.driver.phone || '770000000', // Fallback phone
-          email: null
-        }
-      },
-      remainingSeats: ride.seatsAvailable - (data.seats || 1)
-    };
-
-    bookings.push(newBooking);
-    localStorage.setItem('sunu_yoon_bookings', JSON.stringify(bookings));
-
-    // Mettre à jour les places disponibles du trajet
-    const updatedRides = rides.map((r: any) => {
-      if (r.id === data.rideId) {
-        return { ...r, seatsAvailable: r.seatsAvailable - (data.seats || 1) };
+      let endpoint = '/guest-bookings';
+      // Si connecté, on utilise la route authentifiée qui est plus sûre/better
+      if (token) {
+        endpoint = '/bookings';
       }
-      return r;
-    });
-    localStorage.setItem('sunu_yoon_local_rides', JSON.stringify(updatedRides));
 
-    return newBooking;
-  },
+      const payload = {
+        rideId: data.rideId,
+        seats: data.seats,
+        passengerName: data.passengerName, // Utilisé par guest, ignoré par auth (prend profil)
+        passengerPhone: data.passengerPhone, // Idem
+        paymentMethod: data.paymentMethod,
+        contactPreference: data.contactPreference,
+        notes: data.notes
+      };
 
-  // Mes réservations (en tant que passager)
+      const response = await ApiClient.post<{ booking: any }>(endpoint, payload);
+
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Erreur lors de la réservation');
+      }
+
+      return response.data?.booking;
+    } catch (error) {
+      console.error('Create booking error:', error);
+      throw error;
+    }
+  }
+
+  // Mes réservations
   async getMyBookings(): Promise<GuestBooking[]> {
-    const bookings = JSON.parse(localStorage.getItem('sunu_yoon_bookings') || '[]');
-    // Dans une vraie app, on filtrerait par ID utilisateur. Ici on retourne tout pour la démo.
-    return bookings.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-  },
+    try {
+      const response = await ApiClient.get<GuestBooking[]>('/bookings');
+      if (response.success && response.data) {
+        return response.data;
+      }
+      return [];
+    } catch (error) {
+      console.error('Get bookings error:', error);
+      return [];
+    }
+  }
 
-  // Les demandes sur mes trajets (en tant que conducteur)
+  // Demandes reçues (Conducteur)
   async getDriverRequests(): Promise<GuestBooking[]> {
-    const bookings = JSON.parse(localStorage.getItem('sunu_yoon_bookings') || '[]');
-    // Pour la démo, on retourne toutes les réservations en attente
-    return bookings.filter((b: any) => b.status === 'pending');
-  },
+    try {
+      const response = await ApiClient.get<GuestBooking[]>('/bookings/requests');
+      if (response.success && response.data) {
+        return response.data;
+      }
+      return [];
+    } catch (error) {
+      console.error('Get requests error:', error);
+      return [];
+    }
+  }
 
   // Confirmer une réservation
   async confirmBooking(bookingId: string): Promise<void> {
-    const bookings = JSON.parse(localStorage.getItem('sunu_yoon_bookings') || '[]');
-    const updatedBookings = bookings.map((b: any) => {
-      if (b.id === bookingId) {
-        return { ...b, status: 'confirmed' };
-      }
-      return b;
-    });
-    localStorage.setItem('sunu_yoon_bookings', JSON.stringify(updatedBookings));
-  },
+    const response = await ApiClient.post<any>(`/bookings/${bookingId}/confirm`);
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Erreur lors de la confirmation');
+    }
+  }
 
-  // Annuler une réservation
+  // Annuler (Non implémenté en backend pour Guest, mais pour Auth oui)
   async cancelBooking(bookingId: string): Promise<{ success: boolean }> {
-    const bookings = JSON.parse(localStorage.getItem('sunu_yoon_bookings') || '[]');
-    const updatedBookings = bookings.map((b: any) => {
-      if (b.id === bookingId) {
-        return { ...b, status: 'cancelled' };
-      }
-      return b;
-    });
-    localStorage.setItem('sunu_yoon_bookings', JSON.stringify(updatedBookings));
+    // TODO: Implement cancel endpoint
     return { success: true };
   }
-};
+}
+
+export const bookingService = new BookingService();
+

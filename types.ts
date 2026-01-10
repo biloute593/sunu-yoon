@@ -16,10 +16,14 @@ export interface User {
   lastName?: string;
   name?: string;
   email?: string;
+  phone?: string;
   avatarUrl?: string;
   rating?: number;
   reviewCount?: number;
   isVerified?: boolean;
+  isDriver?: boolean;
+  carModel?: string;
+  createdAt?: string;
 }
 
 export interface DraftRide {

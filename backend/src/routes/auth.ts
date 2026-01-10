@@ -84,11 +84,18 @@ router.post('/register',
       // Hasher le mot de passe
       const passwordHash = await bcrypt.hash(password, 12);
 
+      // Extraire firstName et lastName du nom complet
+      const nameParts = name.trim().split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(' ') || '';
+
       // Créer l'utilisateur
       const user = await prisma.user.create({
         data: {
           phone,
           email,
+          firstName,
+          lastName: lastName || undefined,
           name,
           passwordHash,
           avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=059669&color=fff`
@@ -129,6 +136,8 @@ router.post('/register',
           user: {
             id: user.id,
             phone: user.phone,
+            firstName: user.firstName,
+            lastName: user.lastName,
             name: user.name,
             email: user.email,
             isPhoneVerified: false
@@ -183,6 +192,8 @@ router.post('/login',
           user: {
             id: user.id,
             phone: user.phone,
+            firstName: user.firstName,
+            lastName: user.lastName,
             name: user.name,
             email: user.email,
             avatarUrl: user.avatarUrl,
