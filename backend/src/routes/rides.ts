@@ -9,6 +9,76 @@ const router = Router();
 // Fallback in-memory store for demo purposes when DB is not connected
 const memoryRides: any[] = [];
 
+// ============ TRAJETS RÉCENTS POUR LA PAGE D'ACCUEIL (PUBLIC) ============
+router.get('/recent', async (req, res, next) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 10;
+    
+    console.log('📋 Chargement des trajets récents...');
+    
+    const rides = await prisma.ride.findMany({
+      where: {
+        status: 'OPEN',
+        departureTime: { gte: new Date() }
+      },
+      include: {
+        driver: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+            rating: true,
+            reviewCount: true,
+            isVerified: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit
+    });
+
+    console.log(`✅ ${rides.length} trajet(s) récent(s) trouvé(s)`);
+
+    res.json({
+      success: true,
+      data: {
+        rides: rides.map(ride => ({
+          id: ride.id,
+          driver: {
+            id: ride.driver?.id || 'unknown',
+            firstName: ride.driver?.name?.split(' ')[0] || 'Conducteur',
+            lastName: ride.driver?.name?.split(' ').slice(1).join(' ') || '',
+            name: ride.driver?.name || 'Conducteur',
+            avatarUrl: ride.driver?.avatarUrl || `https://ui-avatars.com/api/?name=C&background=10b981&color=fff`,
+            rating: ride.driver?.rating || 5,
+            reviewCount: ride.driver?.reviewCount || 0,
+            isVerified: ride.driver?.isVerified || false
+          },
+          origin: ride.originCity,
+          originAddress: ride.originAddress,
+          destination: ride.destinationCity,
+          destinationAddress: ride.destinationAddress,
+          departureTime: new Date(ride.departureTime).toISOString(),
+          estimatedDuration: `${Math.floor(ride.estimatedDuration / 60)}h ${ride.estimatedDuration % 60}m`,
+          price: ride.pricePerSeat,
+          currency: ride.currency,
+          seatsAvailable: ride.availableSeats,
+          totalSeats: ride.totalSeats,
+          carModel: 'Véhicule',
+          features: ride.features,
+          description: ride.description,
+          status: ride.status,
+          createdAt: ride.createdAt.toISOString()
+        })),
+        total: rides.length
+      }
+    });
+  } catch (error) {
+    console.error('Erreur chargement trajets récents:', error);
+    next(error);
+  }
+});
+
 // ============ RECHERCHER DES TRAJETS (PUBLIC) ============
 router.get('/search',
   query('origin').notEmpty().withMessage('Ville de départ requise'),

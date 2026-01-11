@@ -65,6 +65,27 @@ const saveLocalRide = (ride: Ride) => {
 };
 
 class RideService {
+  // Récupérer les trajets récents pour la page d'accueil
+  async getRecentRides(limit: number = 10): Promise<Ride[]> {
+    try {
+      console.log('📋 Chargement des trajets récents...');
+      const response = await ApiClient.get<{ data: { rides: Ride[] } }>(`/rides/recent?limit=${limit}`);
+
+      if (!response.success) {
+        console.error('Erreur chargement trajets récents:', response.error);
+        return getLocalRides().slice(0, limit);
+      }
+
+      // @ts-ignore
+      const rides = response.data?.rides || [];
+      console.log(`✅ ${rides.length} trajet(s) récent(s) chargé(s)`);
+      return rides;
+    } catch (error) {
+      console.error('Erreur getRecentRides:', error);
+      return getLocalRides().slice(0, limit);
+    }
+  }
+
   // Rechercher des trajets
   async searchRides(params: RideSearchParams): Promise<Ride[]> {
     try {

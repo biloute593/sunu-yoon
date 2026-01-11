@@ -50,12 +50,17 @@ interface SearchParams {
 
 // Convertir les données de l'API vers le format frontend
 const mapApiRideToRide = (apiRide: ApiRide): Ride => {
+  // Le nom peut venir de firstName/lastName ou directement de name
+  const driverName = apiRide.driver.name || 
+    `${apiRide.driver.firstName || ''} ${apiRide.driver.lastName || ''}`.trim() || 
+    'Conducteur';
+  
   return {
     id: apiRide.id,
     driver: {
-      id: apiRide.driver.id,
-      name: `${apiRide.driver.firstName} ${apiRide.driver.lastName || ''}`.trim(),
-      avatarUrl: apiRide.driver.avatarUrl || `https://ui-avatars.com/api/?name=${apiRide.driver.firstName}&background=10b981&color=fff`,
+      id: apiRide.driver.id || 'unknown',
+      name: driverName,
+      avatarUrl: apiRide.driver.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(driverName)}&background=10b981&color=fff`,
       rating: apiRide.driver.rating || 4.5,
       reviewCount: apiRide.driver.reviewCount || 0,
       isVerified: apiRide.driver.isVerified || false
@@ -1432,10 +1437,10 @@ function AppContent() {
       const loadRecentRides = async () => {
         try {
           console.log('Chargement des trajets récents...');
-          // Fetch rides with empty params to get all/recent
-          const rides = await rideService.searchRides({});
+          // Utiliser la nouvelle méthode getRecentRides
+          const rides = await rideService.getRecentRides(6);
           console.log(`${rides.length} trajet(s) chargé(s)`);
-          setRecentRides(rides.slice(0, 3).map(mapApiRideToRide));
+          setRecentRides(rides.slice(0, 6).map(mapApiRideToRide));
         } catch (error) {
           console.error('Error loading recent rides:', error);
         }
