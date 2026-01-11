@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x"]
 }
 
@@ -9,133 +9,109 @@ datasource db {
 }
 
 model User {
-  id          String    @id @default(uuid())
-  email       String?   @unique
-  passwordHash String
-  firstName   String
-  lastName    String?
-  name        String
-  phone       String    @unique
-  avatarUrl   String?
-  rating      Float     @default(5.0)
-  reviewCount Int       @default(0)
-  isVerified  Boolean   @default(false)
-  isPhoneVerified Boolean @default(false)
-  isEmailVerified Boolean @default(false)
-  isDriver    Boolean   @default(false)
-  carModel    String?
-  refreshToken String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  rides       Ride[]
-  bookings    Booking[]
-  messagesSent     Message[] @relation("SentMessages")
-  messagesReceived Message[] @relation("ReceivedMessages")
-  notifications    Notification[]
+  id                String             @id @default(uuid())
+  email             String?            @unique
+  password          String
+  name              String
+  avatarUrl         String?
+  rating            Float              @default(5.0)
+  reviewCount       Int                @default(0)
+  isVerified        Boolean            @default(false)
+  carModel          String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  phone             String             @unique
+  refreshToken      String?
+  isDriver          Boolean            @default(false)
+  bookings          Booking[]
+  messagesReceived  Message[]          @relation("ReceivedMessages")
+  messagesSent      Message[]          @relation("SentMessages")
+  notifications     Notification[]
+  rides             Ride[]
   verificationCodes VerificationCode[]
 }
 
 model Ride {
-  id                String    @id @default(uuid())
-  driverId          String
-  driver            User      @relation(fields: [driverId], references: [id])
-  
-  originCity        String
-  originAddress     String?
-  originLat         Float?
-  originLng         Float?
-  
-  destinationCity   String
+  id                 String    @id @default(uuid())
+  driverId           String
+  originCity         String
+  originAddress      String?
+  originLat          Float?
+  originLng          Float?
+  destinationCity    String
   destinationAddress String?
-  destinationLat    Float?
-  destinationLng    Float?
-  
-  departureTime     DateTime
-  pricePerSeat      Int
-  currency          String    @default("XOF")
-  
-  totalSeats        Int
-  availableSeats    Int
-  
-  description       String?
-  features          String[]
-  
-  estimatedDuration Int       @default(0) // In minutes
-  distance          Float?    // In km
-  
-  status            String    @default("OPEN") // OPEN, FULL, CANCELLED, COMPLETED
-  
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
-  bookings          Booking[]
+  destinationLat     Float?
+  destinationLng     Float?
+  departureTime      DateTime
+  pricePerSeat       Int
+  currency           String    @default("XOF")
+  totalSeats         Int
+  availableSeats     Int
+  description        String?
+  features           String[]
+  estimatedDuration  Int       @default(0)
+  distance           Float?
+  status             String    @default("OPEN")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  bookings           Booking[]
+  driver             User      @relation(fields: [driverId], references: [id])
 }
 
 model Booking {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   rideId      String
-  ride        Ride      @relation(fields: [rideId], references: [id])
   passengerId String
-  passenger   User      @relation(fields: [passengerId], references: [id])
-  
   seats       Int
-  status      String    @default("PENDING") // PENDING, CONFIRMED, CANCELLED, REJECTED
-  
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  passenger   User     @relation(fields: [passengerId], references: [id])
+  ride        Ride     @relation(fields: [rideId], references: [id])
 }
 
 model GuestBooking {
-  id          String    @id @default(uuid())
-  rideId      String?   // Optional link to a ride if it matches
-  
+  id          String   @id @default(uuid())
+  rideId      String?
   origin      String
   destination String
   date        DateTime
   seats       Int
-  
   name        String
   phone       String
-  
-  status      String    @default("PENDING")
-  createdAt   DateTime  @default(now())
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
 }
 
 model Message {
-  id          String    @id @default(uuid())
-  content     String
-  senderId    String
-  sender      User      @relation("SentMessages", fields: [senderId], references: [id])
-  receiverId  String
-  receiver    User      @relation("ReceivedMessages", fields: [receiverId], references: [id])
-  
-  read        Boolean   @default(false)
-  createdAt   DateTime  @default(now())
+  id         String   @id @default(uuid())
+  content    String
+  senderId   String
+  receiverId String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
 }
 
 model Notification {
-  id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  
-  type        String    // BOOKING_REQUEST, BOOKING_CONFIRMED, etc.
-  title       String
-  message     String
-  read        Boolean   @default(false)
-  data        Json?
-  
-  createdAt   DateTime  @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model VerificationCode {
   id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
   code      String
-  type      String
-  used      Boolean  @default(false)
   expiresAt DateTime
   createdAt DateTime @default(now())
+  type      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
 }
-

@@ -52,15 +52,13 @@ router.post('/', inputValidators, async (req: Request, res: Response, next: Next
         const nameParts = passengerName.trim().split(' ');
         const firstName = nameParts[0];
         const lastName = nameParts.slice(1).join(' ') || '';
-        const passwordHash = await bcrypt.hash('guest_' + Math.random().toString(36), 10);
+        const hashedPassword = await bcrypt.hash('guest_' + Math.random().toString(36), 10);
 
         user = await tx.user.create({
           data: {
             phone,
             name: passengerName,
-            firstName,
-            lastName: lastName || undefined, // Prisma n'aime pas les chaines vides pour optional? check schema
-            passwordHash,
+            password: hashedPassword,
             isVerified: false,
             avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(passengerName)}&background=10b981&color=fff`
           }

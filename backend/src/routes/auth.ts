@@ -82,7 +82,7 @@ router.post('/register',
       }
 
       // Hasher le mot de passe
-      const passwordHash = await bcrypt.hash(password, 12);
+      const hashedPassword = await bcrypt.hash(password, 12);
 
       // Extraire firstName et lastName du nom complet
       const nameParts = name.trim().split(' ');
@@ -97,7 +97,7 @@ router.post('/register',
           firstName,
           lastName: lastName || undefined,
           name,
-          passwordHash,
+          password: hashedPassword,
           avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=059669&color=fff`
         }
       });
@@ -174,7 +174,7 @@ router.post('/login',
         throw new AppError('Identifiants incorrects', 401);
       }
 
-      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
         throw new AppError('Identifiants incorrects', 401);
       }

@@ -263,21 +263,14 @@ router.post('/',
         let user = await prisma.user.findUnique({ where: { phone } });
 
         if (!user) {
-          // Extraire Prénom/Nom
-          const nameParts = driverName.trim().split(' ');
-          const firstName = nameParts[0];
-          const lastName = nameParts.slice(1).join(' ') || '';
-
           // Créer un utilisateur "invité"
-          const passwordHash = await import('bcryptjs').then(b => b.hash('pass_' + Math.random().toString(36), 10));
+          const hashedPassword = await import('bcryptjs').then(b => b.hash('pass_' + Math.random().toString(36), 10));
 
           user = await prisma.user.create({
             data: {
               phone,
               name: driverName,
-              firstName,
-              lastName: lastName || undefined,
-              passwordHash,
+              password: hashedPassword,
               isVerified: false,
               avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(driverName)}&background=10b981&color=fff`
             }
