@@ -37,8 +37,22 @@ const io = new SocketServer(httpServer, {
   }
 });
 
-// Prisma Client
-export const prisma = new PrismaClient();
+// Prisma Client avec configuration optimisée pour serverless
+let prismaInstance: PrismaClient | null = null;
+
+export const getPrismaClient = () => {
+  if (!prismaInstance) {
+    console.log('🔄 Initialisation de Prisma Client...');
+    console.log('DATABASE_URL disponible:', !!process.env.DATABASE_URL);
+    
+    prismaInstance = new PrismaClient({
+      log: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['query', 'error', 'warn'],
+    });
+  }
+  return prismaInstance;
+};
+
+export const prisma = getPrismaClient();
 
 // Middleware de base
 app.use(helmet());
