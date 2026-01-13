@@ -5,6 +5,8 @@ import CookieBanner from './components/CookieBanner';
 import AuthModal from './components/AuthModal';
 import BookingModal from './components/BookingModal';
 import ChatWindow from './components/ChatWindow';
+import PassengerRequestForm from './components/PassengerRequestForm';
+import RideRequestsList from './components/RideRequestsList';
 import FAQSection from './components/FAQ';
 import { Icons } from './components/Icons';
 import LiveTrackingPanel from './components/LiveTrackingPanel';
@@ -688,7 +690,7 @@ const PublishCityInput: React.FC<{
 };
 
 const PublishForm: React.FC<{
-  onPublish: (ride: DraftRide) => void,
+  onPublish: (ride: ApiRide) => void,
   onCancel: () => void,
   isAuthenticated?: boolean
 }> = ({ onPublish, onCancel, isAuthenticated = false }) => {
@@ -755,7 +757,7 @@ const PublishForm: React.FC<{
       console.log('Trajet créé avec succès:', createdRide);
 
       setPublishedSuccess(true);
-      onPublish(formData);
+      onPublish(createdRide);
     } catch (error) {
       console.error('Erreur création trajet:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la publication du trajet';
@@ -1425,6 +1427,7 @@ function AppContent() {
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [recentRides, setRecentRides] = useState<Ride[]>([]);
   const [homeRefreshKey, setHomeRefreshKey] = useState(0);
+  const [showPassengerRequestForm, setShowPassengerRequestForm] = useState(false);
 
   // Scroll to top on view change
   useEffect(() => {
@@ -1561,35 +1564,39 @@ function AppContent() {
     setShowBookingModal(true);
   };
 
-  const handlePublishRide = async (draft: DraftRide) => {
-    console.log('Trajet publié, rafraîchissement de la liste...');
-    
-    // Forcer le rechargement de la page d'accueil
-    setHomeRefreshKey(prev => prev + 1);
-    
-    // 1. Recharger les trajets récents
+  const handlePublishRide = async (createdRide: ApiRide) => {
+    console.log('Trajet publié, mise à jour de l\'accueil...');
+
+    // Leboncoin-like: retour accueil après publication
+    setCurrentView('home');
+
+    // Optimiste: injecter le trajet immédiatement
     try {
-      const rides = await rideService.searchRides({});
-      console.log(`${rides.length} trajet(s) disponible(s) après publication`);
-      setRecentRides(rides.slice(0, 3).map(mapApiRideToRide));
+      const mapped = mapApiRideToRide(createdRide);
+      setRecentRides(prev => [mapped, ...prev.filter(r => r.id !== mapped.id)].slice(0, 6));
     } catch (e) {
-      console.error("Erreur rechargement trajets:", e);
+      console.warn('Insertion optimiste échouée (fallback refresh):', e);
     }
 
-    // 2. Rediriger
+    // Refresh: recharger depuis l'endpoint /recent (sans params obligatoires)
+    try {
+      setHomeRefreshKey(prev => prev + 1);
+      const rides = await rideService.getRecentRides(6);
+      setRecentRides(rides.map(mapApiRideToRide));
+    } catch (e) {
+      console.error('Erreur rechargement trajets récents:', e);
+    }
+
+    // Garder le profil à jour si connecté (sans changer de vue)
     if (isAuthenticated) {
       setProfileRefreshKey(prev => prev + 1);
-      setCurrentView('profile');
-    } else {
-      // Si pas connecté (guest), aller à l'accueil
-      setCurrentView('home');
     }
   };
 
   const handleBookingSuccess = (bookingId: string) => {
     console.log('Réservation réussie:', bookingId);
     setShowBookingModal(false);
-    setCurrentView('profile');
+    setCurrentView('home');
   };
 
   const renderContent = () => {
@@ -1634,11 +1641,11 @@ function AppContent() {
                     Proposer un trajet
                   </button>
                   <button
-                    onClick={() => document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' })}
-                    className="flex items-center gap-2 bg-emerald-700/50 backdrop-blur-sm text-white px-6 py-3 rounded-full font-bold border border-white/20 hover:bg-emerald-700/70 transform hover:scale-105 active:scale-95 transition-all duration-200"
+                    onClick={() => setShowPassengerRequestForm(true)}
+                    className="flex items-center gap-2 bg-blue-500 text-white px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-2xl transform hover:scale-110 active:scale-95 transition-all duration-200"
                   >
                     <Icons.Search size={20} />
-                    Trouver un trajet
+                    Je cherche un trajet
                   </button>
                 </div>
 
@@ -1660,21 +1667,8 @@ function AppContent() {
               </div>
             </div>
 
-
-
             <div className="px-4 pb-20">
-              <div className="max-w-6xl mx-auto mt-8 mb-6 flex flex-col md:flex-row md:items-center gap-4">
-                <button
-                  onClick={() => setCurrentView('publish')}
-                  className="w-full md:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
-                >
-                  <Icons.PlusCircle size={18} />
-                  Publier un trajet
-                </button>
-                <p className="text-sm text-gray-500 md:ml-4">Publiez gratuitement, aucune inscription nécessaire.</p>
-              </div>
-
-              <div className="mb-12">
+              <div className="mb-12 -mt-10 relative z-20">
                 <SearchForm
                   onSearch={handleSearch}
                   isLoading={isLoading}
@@ -1799,25 +1793,9 @@ function AppContent() {
                     <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
                       Prêt à voyager ? 🚗
                     </h2>
-                    <p className="text-emerald-100 mb-8 max-w-xl mx-auto">
-                      Rejoignez des milliers de Sénégalais qui voyagent malin. Publiez votre trajet ou trouvez un conducteur en quelques clics.
+                    <p className="text-emerald-100 mb-4 max-w-xl mx-auto">
+                      Rejoignez des milliers de Sénégalais qui voyagent malin avec Sunu Yoon.
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                      <button
-                        onClick={() => setCurrentView('publish')}
-                        className="px-8 py-4 bg-white text-emerald-600 font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
-                      >
-                        <Icons.PlusCircle size={20} />
-                        Proposer un trajet
-                      </button>
-                      <button
-                        onClick={() => setCurrentView('search')}
-                        className="px-8 py-4 bg-emerald-700/50 backdrop-blur-sm text-white font-bold rounded-xl border-2 border-white/20 hover:bg-emerald-700/70 transition-all flex items-center justify-center gap-2"
-                      >
-                        <Icons.Search size={20} />
-                        Rechercher un trajet
-                      </button>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -1985,6 +1963,9 @@ function AppContent() {
         // Publication accessible même sans compte
         return <PublishForm onPublish={handlePublishRide} onCancel={() => setCurrentView('home')} isAuthenticated={isAuthenticated} />;
 
+      case 'ride-requests':
+        return <RideRequestsList />;
+
       case 'profile':
         if (!isAuthenticated) {
           setCurrentView('home');
@@ -2022,6 +2003,7 @@ function AppContent() {
       user={user ? {
         id: user.id,
         name: `${user.firstName} ${user.lastName || ''}`.trim(),
+        phone: user.phone,
         avatarUrl: user.avatarUrl || `https://ui-avatars.com/api/?name=${user.firstName}&background=10b981&color=fff`,
         rating: user.rating || 4.5,
         reviewCount: user.reviewCount || 0,
@@ -2041,6 +2023,16 @@ function AppContent() {
           setCurrentView('profile');
         }}
       />
+
+      {showPassengerRequestForm && (
+        <PassengerRequestForm
+          onClose={() => setShowPassengerRequestForm(false)}
+          onSuccess={() => {
+            setShowPassengerRequestForm(false);
+            setCurrentView('home');
+          }}
+        />
+      )}
 
       {/* Modal Demande de Course (Client) */}
       {showRequestRide && userLocation.coords && (

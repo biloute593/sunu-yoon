@@ -106,3 +106,6 @@ export const optionalAuth = async (
     next();
   }
 };
+
+// Alias pour compatibilité
+export const requireAuth = authMiddleware;

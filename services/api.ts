@@ -10,6 +10,7 @@ const MOCK_RIDES: Ride[] = [
     driver: {
       id: 'd1',
       name: 'Moussa Diop',
+      phone: '+221771234567',
       avatarUrl: 'https://picsum.photos/seed/moussa/100/100',
       rating: 4.8,
       reviewCount: 156,
@@ -33,6 +34,7 @@ const MOCK_RIDES: Ride[] = [
     driver: {
       id: 'd2',
       name: 'Fatou Ndiaye',
+      phone: '+221779876543',
       avatarUrl: 'https://picsum.photos/seed/fatou/100/100',
       rating: 4.9,
       reviewCount: 42,

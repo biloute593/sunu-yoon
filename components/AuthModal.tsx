@@ -16,7 +16,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
     const [error, setError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
-        name: '',
+        username: '',
         phone: '',
         password: '',
         confirmPassword: ''
@@ -40,37 +40,49 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
                     throw new Error('Les mots de passe ne correspondent pas');
                 }
 
+                // Validation du pseudo
+                if (!formData.username || formData.username.length < 3) {
+                    throw new Error('Le pseudo doit avoir au moins 3 caractères');
+                }
+
                 const res = await ApiClient.post<any>('/auth/register', {
-                    name: formData.name,
-                    phone: formData.phone,
-                    password: formData.password
+                    username: formData.username,
+                    password: formData.password,
+                    phone: formData.phone || undefined // Optionnel
                 });
+
+                console.log('Réponse inscription:', res);
 
                 if (res.success && res.data) {
                     login(res.data.user, res.data.tokens);
                     onSuccess();
                     onClose();
                 } else {
-                    throw new Error(res.error?.message || 'Erreur lors de l\'inscription');
+                    const errorMsg = res.error?.message || res.message || 'Erreur lors de l\'inscription';
+                    throw new Error(errorMsg);
                 }
 
             } else {
                 const res = await ApiClient.post<any>('/auth/login', {
-                    phone: formData.phone,
+                    identifier: formData.username || formData.phone, // Pseudo ou téléphone
                     password: formData.password
                 });
+
+                console.log('Réponse connexion:', res);
 
                 if (res.success && res.data) {
                     login(res.data.user, res.data.tokens);
                     onSuccess();
                     onClose();
                 } else {
-                    throw new Error(res.error?.message || 'Identifiants incorrects');
+                    const errorMsg = res.error?.message || res.message || 'Identifiants incorrects';
+                    throw new Error(errorMsg);
                 }
             }
         } catch (err: any) {
             console.error('Auth error:', err);
-            setError(err.message || 'Une erreur est survenue');
+            const errorMessage = err.response?.data?.message || err.message || 'Une erreur est survenue';
+            setError(errorMessage);
         } finally {
             setIsLoading(false);
         }
@@ -105,36 +117,42 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {view === 'register' && (
                             <div className="space-y-1">
-                                <label className="text-sm font-medium text-gray-700">Nom complet</label>
+                                <label className="text-sm font-medium text-gray-700">Pseudo (unique)</label>
                                 <div className="relative">
                                     <Icons.User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                     <input
                                         type="text"
-                                        name="name"
-                                        value={formData.name}
+                                        name="username"
+                                        value={formData.username}
                                         onChange={handleChange}
-                                        placeholder="Ex: Moussa Diop"
+                                        placeholder="Ex: moussa_senegal"
                                         className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
                                         required
                                     />
                                 </div>
+                                <p className="text-xs text-gray-500">Votre identifiant unique sur Sunu Yoon</p>
                             </div>
                         )}
 
                         <div className="space-y-1">
-                            <label className="text-sm font-medium text-gray-700">Téléphone</label>
+                            <label className="text-sm font-medium text-gray-700">
+                                {view === 'login' ? 'Pseudo ou Téléphone' : 'Téléphone (optionnel)'}
+                            </label>
                             <div className="relative">
                                 <Icons.Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
-                                    type="tel"
-                                    name="phone"
-                                    value={formData.phone}
+                                    type="text"
+                                    name={view === 'login' ? 'username' : 'phone'}
+                                    value={view === 'login' ? formData.username : formData.phone}
                                     onChange={handleChange}
-                                    placeholder="Ex: 771234567"
+                                    placeholder={view === 'login' ? 'Votre pseudo ou 771234567' : 'Ex: 771234567 (optionnel)'}
                                     className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                                    required
+                                    required={view === 'login'}
                                 />
                             </div>
+                            {view === 'register' && (
+                                <p className="text-xs text-gray-500">Pour recevoir les notifications SMS (optionnel)</p>
+                            )}
                         </div>
 
                         <div className="space-y-1">

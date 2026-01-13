@@ -49,12 +49,11 @@ const generateTokens = (userId: string, phone: string) => {
   return { accessToken, refreshToken };
 };
 
-// ============ INSCRIPTION ============
+// ============ INSCRIPTION SIMPLIFIÉE (Pseudo + Mot de passe) ============
 router.post('/register',
-  body('phone').matches(/^(\+221|221)?[7][0-9]{8}$/).withMessage('Numéro de téléphone sénégalais invalide'),
-  body('name').isLength({ min: 2, max: 100 }).withMessage('Le nom doit avoir entre 2 et 100 caractères'),
+  body('username').isLength({ min: 3, max: 30 }).withMessage('Le pseudo doit avoir entre 3 et 30 caractères'),
   body('password').isLength({ min: 6 }).withMessage('Le mot de passe doit avoir au moins 6 caractères'),
-  body('email').optional().isEmail().withMessage('Email invalide'),
+  body('phone').optional().matches(/^(\+221|221)?[7][0-9]{8}$/).withMessage('Numéro de téléphone invalide'),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
@@ -62,63 +61,48 @@ router.post('/register',
         throw new AppError(errors.array()[0].msg, 400);
       }
 
-      let { phone, name, password, email } = req.body;
+      const { username, password, phone } = req.body;
 
-      // Normaliser le numéro de téléphone
-      phone = phone.replace(/^\+?221/, '').replace(/\s/g, '');
-      phone = `+221${phone}`;
-
-      // Vérifier si l'utilisateur existe déjà
-      const existingUser = await prisma.user.findUnique({ where: { phone } });
+      // Vérifier si le pseudo existe déjà
+      const existingUser = await prisma.user.findFirst({ 
+        where: { 
+          name: { equals: username, mode: 'insensitive' }
+        } 
+      });
+      
       if (existingUser) {
-        throw new AppError('Ce numéro de téléphone est déjà utilisé', 409);
+        throw new AppError('Ce pseudo est déjà utilisé', 409);
       }
 
-      if (email) {
-        const existingEmail = await prisma.user.findUnique({ where: { email } });
-        if (existingEmail) {
-          throw new AppError('Cet email est déjà utilisé', 409);
+      // Normaliser le téléphone si fourni
+      let normalizedPhone = phone;
+      if (phone) {
+        normalizedPhone = phone.replace(/^\+?221/, '').replace(/\s/g, '');
+        normalizedPhone = `+221${normalizedPhone}`;
+        
+        // Vérifier si le téléphone existe déjà
+        const existingPhone = await prisma.user.findUnique({ where: { phone: normalizedPhone } });
+        if (existingPhone) {
+          throw new AppError('Ce numéro de téléphone est déjà utilisé', 409);
         }
+      } else {
+        // Générer un numéro fictif unique si pas de téléphone
+        normalizedPhone = `+221${Date.now().toString().slice(-9)}`;
       }
 
       // Hasher le mot de passe
       const hashedPassword = await bcrypt.hash(password, 12);
 
-      // Extraire firstName et lastName du nom complet
-      const nameParts = name.trim().split(' ');
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(' ') || '';
-
-      // Créer l'utilisateur
+      // Créer l'utilisateur (plus de vérification nécessaire)
       const user = await prisma.user.create({
         data: {
-          phone,
-          email,
-          firstName,
-          lastName: lastName || undefined,
-          name,
+          phone: normalizedPhone,
+          name: username,
           password: hashedPassword,
-          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=059669&color=fff`
+          isVerified: true, // Auto-vérifié
+          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=059669&color=fff`
         }
       });
-
-      // Générer et envoyer le code de vérification SMS
-      const code = generateCode();
-      await prisma.verificationCode.create({
-        data: {
-          userId: user.id,
-          code,
-          type: 'PHONE_VERIFICATION',
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
-        }
-      });
-
-      // Envoyer le SMS (en production)
-      if (process.env.NODE_ENV === 'production') {
-        await sendVerificationCode(phone, code);
-      } else {
-        logger.info(`[DEV] Code de vérification pour ${phone}: ${code}`);
-      }
 
       // Générer les tokens
       const tokens = generateTokens(user.id, user.phone);
@@ -131,19 +115,16 @@ router.post('/register',
 
       res.status(201).json({
         success: true,
-        message: 'Inscription réussie. Veuillez vérifier votre téléphone.',
+        message: 'Compte créé avec succès !',
         data: {
           user: {
             id: user.id,
             phone: user.phone,
-            firstName: user.firstName,
-            lastName: user.lastName,
             name: user.name,
-            email: user.email,
-            isPhoneVerified: false
+            avatarUrl: user.avatarUrl,
+            isVerified: user.isVerified
           },
-          tokens,
-          verificationRequired: true
+          tokens
         }
       });
     } catch (error) {
@@ -152,9 +133,9 @@ router.post('/register',
   }
 );
 
-// ============ CONNEXION ============
+// ============ CONNEXION SIMPLIFIÉE (Pseudo ou Téléphone + Mot de passe) ============
 router.post('/login',
-  body('phone').matches(/^(\+221|221)?[7][0-9]{8}$/).withMessage('Numéro de téléphone invalide'),
+  body('identifier').notEmpty().withMessage('Pseudo ou téléphone requis'),
   body('password').notEmpty().withMessage('Mot de passe requis'),
   async (req, res, next) => {
     try {
@@ -163,13 +144,18 @@ router.post('/login',
         throw new AppError(errors.array()[0].msg, 400);
       }
 
-      let { phone, password } = req.body;
+      const { identifier, password } = req.body;
 
-      // Normaliser le numéro
-      phone = phone.replace(/^\+?221/, '').replace(/\s/g, '');
-      phone = `+221${phone}`;
+      // Chercher l'utilisateur par pseudo ou téléphone
+      let user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { name: { equals: identifier, mode: 'insensitive' } },
+            { phone: { contains: identifier.replace(/\s/g, '') } }
+          ]
+        }
+      });
 
-      const user = await prisma.user.findUnique({ where: { phone } });
       if (!user) {
         throw new AppError('Identifiants incorrects', 401);
       }
@@ -192,15 +178,13 @@ router.post('/login',
           user: {
             id: user.id,
             phone: user.phone,
-            firstName: user.firstName,
-            lastName: user.lastName,
             name: user.name,
             email: user.email,
             avatarUrl: user.avatarUrl,
             rating: user.rating,
             reviewCount: user.reviewCount,
             isVerified: user.isVerified,
-            isPhoneVerified: user.isPhoneVerified
+            isDriver: user.isDriver
           },
           tokens
         }
@@ -237,7 +221,6 @@ router.post('/verify',
           userId: decoded.userId,
           code,
           type,
-          used: false,
           expiresAt: { gt: new Date() }
         }
       });
@@ -246,19 +229,14 @@ router.post('/verify',
         throw new AppError('Code invalide ou expiré', 400);
       }
 
-      // Marquer comme utilisé
-      await prisma.verificationCode.update({
-        where: { id: verification.id },
-        data: { used: true }
-      });
+      // Supprimer le code (le modèle actuel ne gère pas "used")
+      await prisma.verificationCode.delete({ where: { id: verification.id } });
 
       // Mettre à jour le statut de vérification
       const updateData: any = {};
-      if (type === 'PHONE_VERIFICATION') {
-        updateData.isPhoneVerified = true;
-        updateData.isVerified = true; // Le téléphone suffit pour être vérifié
-      } else if (type === 'EMAIL_VERIFICATION') {
-        updateData.isEmailVerified = true;
+      // Dans ce schéma, on ne distingue pas phone/email; on marque simplement l'utilisateur comme vérifié.
+      if (type === 'PHONE_VERIFICATION' || type === 'EMAIL_VERIFICATION') {
+        updateData.isVerified = true;
       }
 
       const user = await prisma.user.update({
@@ -270,8 +248,6 @@ router.post('/verify',
         success: true,
         message: 'Vérification réussie',
         data: {
-          isPhoneVerified: user.isPhoneVerified,
-          isEmailVerified: user.isEmailVerified,
           isVerified: user.isVerified
         }
       });

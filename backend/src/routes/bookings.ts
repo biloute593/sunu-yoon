@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { prisma } from '../index';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { sendBookingNotificationToDriver, sendBookingConfirmationToPassenger } from '../services/sms';
 
 const router = Router();
 
@@ -108,6 +109,9 @@ router.post('/',
 
         return booking;
       });
+
+      // SMS désactivé - Notifications in-app uniquement
+      // Les utilisateurs verront les notifications dans l'application
 
       res.status(201).json({
         success: true,
@@ -245,7 +249,14 @@ router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res, next) 
     const updatedBooking = await prisma.booking.update({
       where: { id },
       data: { status: 'CONFIRMED' },
-      include: { passenger: true } // Pour notifier
+      include: { 
+        passenger: true,
+        ride: {
+          include: {
+            driver: true
+          }
+        }
+      }
     });
 
     // Notifier le passager
@@ -258,6 +269,8 @@ router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res, next) 
         data: { bookingId: booking.id }
       }
     });
+
+    // SMS désactivé - Notifications in-app uniquement
 
     res.json({
       success: true,

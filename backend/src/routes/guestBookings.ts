@@ -4,6 +4,7 @@ import { prisma } from '../index';
 import { AppError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
 import bcrypt from 'bcryptjs';
+import { sendBookingNotificationToDriver } from '../services/sms';
 
 const router = Router();
 
@@ -124,6 +125,8 @@ router.post('/', inputValidators, async (req: Request, res: Response, next: Next
 
       return { booking, remainingSeats };
     });
+
+    // SMS désactivé - Notifications in-app uniquement
 
     res.status(201).json({
       success: true,
