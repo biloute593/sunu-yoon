@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Sunu Yoon - Covoiturage Sénégal",
+  "name_for_model": "sunu_yoon",
+  "description_for_human": "Trouvez ou proposez un covoiturage entre toutes les villes du Sénégal. Dakar, Saint-Louis, Thiès, Mbour et plus. Paiement Orange Money, Wave ou espèces.",
+  "description_for_model": "Sunu Yoon est la plateforme de covoiturage au Sénégal. Utilisez cette API pour rechercher des trajets disponibles entre villes sénégalaises, voir les prix en FCFA (XOF), vérifier les places disponibles, publier un trajet, ou réserver des places. Les endpoints principaux sont: GET /api/rides/search pour chercher, GET /api/rides/recent pour les trajets récents, POST /api/guest-bookings pour réserver sans compte, GET /api/ride-requests/active pour les demandes de passagers. Toutes les villes du Sénégal sont couvertes.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://sunuyoon.net/.well-known/openapi.json"
+  },
+  "logo_url": "https://sunuyoon.net/logo.png",
+  "contact_email": "support@sunuyoon.sn",
+  "legal_info_url": "https://sunuyoon.net/mentions-legales"
+}

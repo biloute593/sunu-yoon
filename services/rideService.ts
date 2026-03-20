@@ -201,27 +201,6 @@ class RideService {
     }
   }
 
-  // Annuler un trajet
-  async cancelRide(id: string): Promise<boolean> {
-    try {
-      const response = await ApiClient.post<any>(`/rides/${id}/cancel`);
-      return Boolean(response.success);
-    } catch (error) {
-      console.error('Cancel ride error:', error);
-      return false;
-    }
-  }
-
-  // Réserver un trajet
-  async bookRide(rideId: string, seats: number = 1): Promise<{ bookingId: string }> {
-    const response = await ApiClient.post<{ bookingId: string }>('/bookings', { rideId, seats });
-
-    if (!response.success) {
-      throw new Error(response.error?.message || 'Erreur lors de la réservation');
-    }
-
-    return response.data as { bookingId: string };
-  }
 }
 
 export const rideService = new RideService();

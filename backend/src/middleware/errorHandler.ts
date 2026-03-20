@@ -23,8 +23,10 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
   logger.error(`Error: ${err.message}`, err);
 
   res.status(err.statusCode).json({
+    success: false,
     status: err.status,
     message: err.message,
+    error: { message: err.message },
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 };

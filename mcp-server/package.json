@@ -1,0 +1,29 @@
+{
+  "name": "sunu-yoon-mcp",
+  "version": "1.0.0",
+  "description": "MCP Server pour Sunu Yoon - Covoiturage Sénégal. Permet aux LLMs (ChatGPT, Claude, etc.) de rechercher et réserver des covoiturages au Sénégal.",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "sunu-yoon-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "sunu-yoon",
+    "covoiturage",
+    "senegal",
+    "carpooling",
+    "chatgpt",
+    "claude",
+    "ai-tools"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.23.0"
+  }
+}

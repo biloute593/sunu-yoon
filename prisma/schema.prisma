@@ -9,26 +9,28 @@ datasource db {
 }
 
 model User {
-  id                String             @id @default(uuid())
-  email             String?            @unique
-  password          String
-  name              String
-  avatarUrl         String?
-  rating            Float              @default(5.0)
-  reviewCount       Int                @default(0)
-  isVerified        Boolean            @default(false)
-  carModel          String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  phone             String             @unique
-  refreshToken      String?
-  isDriver          Boolean            @default(false)
-  bookings          Booking[]
-  messagesReceived  Message[]          @relation("ReceivedMessages")
-  messagesSent      Message[]          @relation("SentMessages")
-  notifications     Notification[]
-  rides             Ride[]
-  verificationCodes VerificationCode[]
+  id                      String             @id @default(uuid())
+  email                   String?            @unique
+  password                String
+  name                    String
+  avatarUrl               String?
+  rating                  Float              @default(5.0)
+  reviewCount             Int                @default(0)
+  isVerified              Boolean            @default(false)
+  carModel                String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  phone                   String             @unique
+  refreshToken            String?
+  isDriver                Boolean            @default(false)
+  bookings                Booking[]
+  messagesReceived        Message[]          @relation("ReceivedMessages")
+  messagesSent            Message[]          @relation("SentMessages")
+  notifications           Notification[]
+  rides                   Ride[]
+  verificationCodes       VerificationCode[]
+  rideRequests            RideRequest[]      @relation("PassengerRequests")
+  acceptedRideRequests    RideRequest[]      @relation("DriverAcceptedRequests")
 }
 
 model Ride {
@@ -114,4 +116,21 @@ model VerificationCode {
   type      String
   userId    String
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model RideRequest {
+  id                 String   @id @default(uuid())
+  passengerId        String
+  originCity         String
+  destinationCity    String
+  departureDate      DateTime
+  seats              Int
+  maxPricePerSeat    Int?
+  description        String?
+  status             String   @default("PENDING") // PENDING, ACCEPTED, CANCELLED
+  acceptedByDriverId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  passenger          User     @relation("PassengerRequests", fields: [passengerId], references: [id])
+  acceptedByDriver   User?    @relation("DriverAcceptedRequests", fields: [acceptedByDriverId], references: [id])
 }

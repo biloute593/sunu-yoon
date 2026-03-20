@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../index';
 import { AppError } from '../middleware/errorHandler';
 import { sendVerificationCode } from '../services/sms';
@@ -62,7 +61,8 @@ router.post('/register',
         throw new AppError(errors.array()[0].msg, 400);
       }
 
-      let { phone, name, password, email } = req.body;
+      const { name, password, email } = req.body;
+      let { phone } = req.body;
 
       // Normaliser le numéro de téléphone
       phone = phone.replace(/^\+?221/, '').replace(/\s/g, '');
@@ -84,18 +84,11 @@ router.post('/register',
       // Hasher le mot de passe
       const hashedPassword = await bcrypt.hash(password, 12);
 
-      // Extraire firstName et lastName du nom complet
-      const nameParts = name.trim().split(' ');
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(' ') || '';
-
       // Créer l'utilisateur
       const user = await prisma.user.create({
         data: {
           phone,
           email,
-          firstName,
-          lastName: lastName || undefined,
           name,
           password: hashedPassword,
           avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=059669&color=fff`
@@ -136,11 +129,10 @@ router.post('/register',
           user: {
             id: user.id,
             phone: user.phone,
-            firstName: user.firstName,
-            lastName: user.lastName,
             name: user.name,
             email: user.email,
-            isPhoneVerified: false
+            avatarUrl: user.avatarUrl,
+            isVerified: user.isVerified
           },
           tokens,
           verificationRequired: true
@@ -163,7 +155,8 @@ router.post('/login',
         throw new AppError(errors.array()[0].msg, 400);
       }
 
-      let { phone, password } = req.body;
+      const { password } = req.body;
+      let { phone } = req.body;
 
       // Normaliser le numéro
       phone = phone.replace(/^\+?221/, '').replace(/\s/g, '');
@@ -192,15 +185,13 @@ router.post('/login',
           user: {
             id: user.id,
             phone: user.phone,
-            firstName: user.firstName,
-            lastName: user.lastName,
             name: user.name,
             email: user.email,
             avatarUrl: user.avatarUrl,
             rating: user.rating,
             reviewCount: user.reviewCount,
             isVerified: user.isVerified,
-            isPhoneVerified: user.isPhoneVerified
+            isDriver: user.isDriver
           },
           tokens
         }
@@ -237,7 +228,6 @@ router.post('/verify',
           userId: decoded.userId,
           code,
           type,
-          used: false,
           expiresAt: { gt: new Date() }
         }
       });
@@ -246,19 +236,14 @@ router.post('/verify',
         throw new AppError('Code invalide ou expiré', 400);
       }
 
-      // Marquer comme utilisé
-      await prisma.verificationCode.update({
-        where: { id: verification.id },
-        data: { used: true }
-      });
+      // Supprimer le code (le modèle actuel ne gère pas "used")
+      await prisma.verificationCode.delete({ where: { id: verification.id } });
 
       // Mettre à jour le statut de vérification
       const updateData: any = {};
-      if (type === 'PHONE_VERIFICATION') {
-        updateData.isPhoneVerified = true;
-        updateData.isVerified = true; // Le téléphone suffit pour être vérifié
-      } else if (type === 'EMAIL_VERIFICATION') {
-        updateData.isEmailVerified = true;
+      // Dans ce schéma, on ne distingue pas phone/email; on marque simplement l'utilisateur comme vérifié.
+      if (type === 'PHONE_VERIFICATION' || type === 'EMAIL_VERIFICATION') {
+        updateData.isVerified = true;
       }
 
       const user = await prisma.user.update({
@@ -270,8 +255,6 @@ router.post('/verify',
         success: true,
         message: 'Vérification réussie',
         data: {
-          isPhoneVerified: user.isPhoneVerified,
-          isEmailVerified: user.isEmailVerified,
           isVerified: user.isVerified
         }
       });
@@ -326,7 +309,7 @@ router.post('/resend-code',
         }
       } else if (type === 'EMAIL_VERIFICATION' && user.email) {
         if (process.env.NODE_ENV === 'production') {
-          await sendVerificationEmail(user.email, code, user.name);
+          await sendVerificationEmail(user.email, code);
         } else {
           logger.info(`[DEV] Code Email pour ${user.email}: ${code}`);
         }

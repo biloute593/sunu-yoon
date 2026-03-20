@@ -16,6 +16,7 @@ import userRoutes from './routes/users';
 import rideRoutes from './routes/rides';
 import bookingRoutes from './routes/bookings';
 import guestBookingRoutes from './routes/guestBookings';
+import rideRequestRoutes from './routes/rideRequests';
 import paymentRoutes from './routes/payments';
 import messageRoutes from './routes/messages';
 import notificationRoutes from './routes/notifications';
@@ -88,6 +89,7 @@ app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/rides', rideRoutes); // Certaines routes sont publiques
 app.use('/api/bookings', authMiddleware, bookingRoutes);
 app.use('/api/guest-bookings', guestBookingRoutes);
+app.use('/api/ride-requests', rideRequestRoutes); // Certaines routes publiques
 app.use('/api/payments', authMiddleware, paymentRoutes);
 app.use('/api/messages', authMiddleware, messageRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
@@ -97,8 +99,11 @@ app.use('/api/tracking', trackingRoutes);
 app.use('/webhooks/wave', express.raw({ type: 'application/json' }));
 app.use('/webhooks/orange', express.raw({ type: 'application/json' }));
 
-// Health check
+// Health check (both paths for flexibility)
 app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 

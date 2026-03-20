@@ -1,14 +1,22 @@
 
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
     console.log('🚀 Starting Verification...');
 
+    if (process.env.ALLOW_VERIFY_LOGIC !== 'true') {
+        console.error('❌ Refusing to run: set ALLOW_VERIFY_LOGIC=true to execute this script (it writes to the database).');
+        process.exit(1);
+    }
+
     try {
         // 1. Cleanup previous test data
         console.log('🧹 Cleaning up old test data...');
         // Be careful not to delete real data if any. For now, we assume safe to clean specific test entries if we tracked them, but here we just create new ones.
+
+        const hashedPassword = await bcrypt.hash('TestPassword123!', 10);
 
         // 2. Create a Driver User
         console.log('👤 Creating Driver...');
@@ -19,9 +27,7 @@ async function main() {
                 data: {
                     phone: driverPhone,
                     name: 'Test Driver',
-                    firstName: 'Test',
-                    lastName: 'Driver',
-                    passwordHash: 'hash',
+                    password: hashedPassword,
                     isDriver: true,
                     isVerified: true
                 }
@@ -55,9 +61,7 @@ async function main() {
                 data: {
                     phone: passengerPhone,
                     name: 'Test Passenger',
-                    firstName: 'Test',
-                    lastName: 'Passenger',
-                    passwordHash: 'hash',
+                    password: hashedPassword,
                 }
             });
         }
@@ -100,8 +104,7 @@ async function main() {
                 data: {
                     phone: guestPhone,
                     name: 'Guest User',
-                    firstName: 'Guest',
-                    passwordHash: 'guest_hash',
+                    password: hashedPassword,
                     isVerified: false
                 }
             });

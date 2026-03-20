@@ -395,13 +395,15 @@ router.post('/',
           }
         });
       } catch (dbError) {
+        const errObj = (typeof dbError === 'object' && dbError !== null) ? (dbError as Record<string, unknown>) : null;
+        const message = dbError instanceof Error ? dbError.message : String(dbError);
+        const stack = dbError instanceof Error ? dbError.stack : undefined;
+        const code = errObj && typeof errObj.code === 'string' ? errObj.code : undefined;
+
         console.error('Database error during ride creation:', dbError);
-        console.error('Error details:', {
-          message: dbError.message,
-          stack: dbError.stack,
-          code: dbError.code
-        });
-        throw new AppError('Erreur lors de la création du trajet en base de données: ' + dbError.message, 500);
+        console.error('Error details:', { message, stack, code });
+
+        throw new AppError('Erreur lors de la création du trajet en base de données: ' + message, 500);
       }
 
       console.log('Trajet créé avec succès:', ride.id);

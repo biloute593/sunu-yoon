@@ -40,6 +40,33 @@ export interface DraftRide {
   driverPhone?: string;
 }
 
+/** Frontend-friendly driver displayed in ride cards */
+export interface RideDriver {
+  id: string;
+  name: string;
+  avatarUrl: string;
+  rating: number;
+  reviewCount: number;
+  isVerified: boolean;
+}
+
+/** Frontend-adapted ride (used in cards, details, search results) */
+export interface FrontendRide {
+  id: string;
+  driver: RideDriver;
+  origin: string;
+  destination: string;
+  departureTime: string;
+  price: number;
+  currency: string;
+  seatsAvailable: number;
+  totalSeats: number;
+  carModel: string;
+  description?: string;
+  features: string[];
+  duration: string;
+}
+
 export interface Ride {
   id: string;
   driver: User;

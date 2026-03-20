@@ -1,0 +1,20 @@
+export const SENEGAL_CITIES = [
+  'Dakar', 'Thiès', 'Saint-Louis', 'Kaolack', 'Ziguinchor',
+  'Tambacounda', 'Kolda', 'Matam', 'Fatick', 'Kaffrine',
+  'Kédougou', 'Sédhiou', 'Diourbel', 'Louga', 'Rufisque',
+  'Mbour', 'Tivaouane', 'Touba', 'Richard-Toll', 'Joal-Fadiouth',
+  'Saly', 'Somone', 'Ngaparou', 'La Somone', 'Popenguine',
+  'Nianing', 'Warang', 'Foundiougne', 'Toubacouta', 'Sokone',
+  'Dagana', 'Podor', 'Linguère', 'Ranérou', 'Vélingara',
+  'Bignona', 'Oussouye', 'Diouloulou', 'Cap Skirring',
+  'Bakel', 'Kidira', 'Goudiry', 'Koumpentoum',
+  'Nioro du Rip', 'Gossas', 'Guinguinéo',
+  'Bambey', 'Mbacké', 'Kébémer',
+  'Pikine', 'Guédiawaye', 'Parcelles Assainies', 'Keur Massar',
+  'Diamniadio', 'Sébikotane', 'Pout', 'Kayar',
+  'AIBD (Aéroport)', 'Lac Rose', 'Gorée',
+  'Ngor', 'Yoff', 'Almadies', 'Ouakam', 'Mermoz',
+  'Point E', 'Plateau', 'Médina', 'Grand Dakar',
+  'Liberté', 'Sacré-Coeur', 'Fann', 'Sicap',
+  'HLM', 'Grand Yoff', 'Cambérène', 'Patte d\'Oie'
+];

@@ -1,0 +1,42 @@
+# Sunu Yoon — Covoiturage Sénégal
+
+> La première plateforme de covoiturage au Sénégal. Trouvez ou proposez des trajets entre toutes les villes du Sénégal à petit prix.
+
+## À propos
+
+Sunu Yoon est une application web de covoiturage 100% sénégalaise. Les conducteurs publient des trajets (départ, destination, date, prix, places) et les passagers recherchent et réservent directement. Paiement par Orange Money, Wave ou espèces.
+
+## Fonctionnalités principales
+
+- **Rechercher un trajet** : Trouvez un covoiturage Dakar → Saint-Louis, Thiès → Mbour, ou entre n'importe quelles villes du Sénégal
+- **Publier un trajet** : Proposez vos places libres en tant que conducteur, fixez votre prix en FCFA
+- **Réserver en ligne** : Réservez 1 à 4 places, payez par mobile money ou en espèces
+- **Suivi GPS en temps réel** : Les passagers suivent le conducteur en direct
+- **Demande de trajet** : Les passagers peuvent publier des demandes que les conducteurs voient
+
+## API publique
+
+Base URL: `https://sunuyoon.net/api`
+
+### Endpoints disponibles
+
+- `GET /api/rides/recent` — Trajets récents disponibles
+- `GET /api/rides/search?origin=Dakar&destination=Thies&date=2026-03-15` — Rechercher des trajets
+- `GET /api/rides/:id` — Détail d'un trajet
+- `POST /api/rides` — Publier un trajet (auth requise)
+- `GET /api/ride-requests/active` — Demandes de trajets actives
+- `POST /api/ride-requests` — Créer une demande de trajet
+- `POST /api/guest-bookings` — Réserver sans compte
+- `POST /api/bookings` — Réserver avec compte (auth requise)
+- `GET /api/health` — État du service
+
+## Villes desservies
+
+Dakar, Thiès, Saint-Louis, Touba, Kaolack, Ziguinchor, Rufisque, Mbour, Diourbel, Tambacounda, Kolda, Fatick, Louga, Matam, Kédougou, Sédhiou, Pikine, Guédiawaye, Saly, Somone, Joal-Fadiouth, Richard-Toll, Podor, Vélingara, Bignona, Oussouye, Cap Skirring, Diamniadio, Keur Massar, AIBD
+
+## Contact
+
+- Site : https://sunuyoon.net
+- Email : support@sunuyoon.sn
+- Pays : Sénégal 🇸🇳
+- Devise : FCFA (XOF)

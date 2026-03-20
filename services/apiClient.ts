@@ -1,16 +1,5 @@
 // Configuration de l'API
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-const API_TIMEOUT = 15000; // 15 secondes
-
-// Helper pour ajouter timeout aux fetch
-const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout = API_TIMEOUT): Promise<Response> => {
-  return Promise.race([
-    fetch(url, options),
-    new Promise<Response>((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout: Requête trop longue')), timeout)
-    )
-  ]);
-};
 
 // Types pour les réponses API
 interface ApiResponse<T> {
@@ -110,8 +99,33 @@ class ApiClient {
         }
       }
 
-      const data = await response.json();
-      return data;
+      let data: any = null;
+      try {
+        data = await response.json();
+      } catch {
+        // Réponse non JSON (ex: proxy/HTML/erreur serveur)
+        return {
+          success: false,
+          error: { message: `Erreur serveur (${response.status})` }
+        };
+      }
+
+      // Cas nominal: API renvoie { success: boolean, ... }
+      if (typeof data?.success === 'boolean') {
+        return data as ApiResponse<T>;
+      }
+
+      // Compat: certaines routes d'erreur backend renvoient { status, message }
+      if (!response.ok) {
+        const msg = data?.error?.message || data?.error || data?.message || `Erreur serveur (${response.status})`;
+        return { success: false, error: { message: String(msg) } };
+      }
+
+      // Dernier fallback: si pas de champ success mais OK, considérer data comme payload
+      return {
+        success: true,
+        data: data as T
+      };
     } catch (error) {
       return {
         success: false,

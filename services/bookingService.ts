@@ -45,7 +45,7 @@ class BookingService {
   async createBooking(data: CreateBookingData): Promise<any> {
     try {
       // Vérifier si utilisateur connecté (via présence de token)
-      const token = localStorage.getItem('token'); // Hypothèse: token stocké ici
+      const token = localStorage.getItem('sunu_yoon_access_token');
 
       let endpoint = '/guest-bookings';
       // Si connecté, on utilise la route authentifiée qui est plus sûre/better
@@ -112,11 +112,6 @@ class BookingService {
     }
   }
 
-  // Annuler (Non implémenté en backend pour Guest, mais pour Auth oui)
-  async cancelBooking(bookingId: string): Promise<{ success: boolean }> {
-    // TODO: Implement cancel endpoint
-    return { success: true };
-  }
 }
 
 export const bookingService = new BookingService();

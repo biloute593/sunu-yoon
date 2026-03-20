@@ -21,6 +21,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const loadUser = async () => {
       const token = TokenManager.getAccessToken();
       if (!token) {
+        // Évite les états incohérents (user local sans token)
+        localStorage.removeItem('sunu_yoon_user');
         setIsLoading(false);
         return;
       }
@@ -61,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: TokenManager.isAuthenticated(), isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
