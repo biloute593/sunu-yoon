@@ -112,6 +112,22 @@ class BookingService {
     }
   }
 
+  // Modifier une réservation
+  async updateBooking(bookingId: string, seats: number): Promise<void> {
+    const response = await ApiClient.put<any>(`/bookings/${bookingId}`, { seats });
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Erreur lors de la modification');
+    }
+  }
+
+  // Annuler une réservation
+  async cancelBooking(bookingId: string): Promise<void> {
+    const response = await ApiClient.delete<any>(`/bookings/${bookingId}`);
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Erreur lors de l\'annulation');
+    }
+  }
+
 }
 
 export const bookingService = new BookingService();

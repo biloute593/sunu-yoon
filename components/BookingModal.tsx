@@ -94,7 +94,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
       setBookingId(booking.id);
       setDriverContact(booking.ride.driver);
       setStep('success');
-      onSuccess(booking.id);
+      // NE PAS appeler onSuccess ici — laisser l'utilisateur voir l'écran de succès d'abord
+      // onSuccess sera appelé quand l'utilisateur ferme le modal
 
     } catch (err: any) {
       console.error('Erreur réservation:', err);
@@ -344,10 +345,13 @@ const BookingModal: React.FC<BookingModalProps> = ({
       </div>
 
       <button
-        onClick={resetAndClose}
-        className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all"
+        onClick={() => {
+          onSuccess(bookingId);
+          resetAndClose();
+        }}
+        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all"
       >
-        Fermer
+        ✓ Compris, fermer
       </button>
     </div>
   );

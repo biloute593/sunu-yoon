@@ -219,6 +219,103 @@ router.get('/requests', authMiddleware, async (req: AuthRequest, res, next) => {
   }
 });
 
+// ============ MODIFIER UNE RÉSERVATION ============
+router.put('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+    const { seats } = req.body;
+
+    if (!seats || seats < 1) {
+      throw new AppError('Nombre de places invalide', 400);
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      include: { ride: true }
+    });
+
+    if (!booking) throw new AppError('Réservation non trouvée', 404);
+    if (booking.passengerId !== userId) throw new AppError('Non autorisé', 403);
+    if (booking.status === 'CANCELLED') throw new AppError('Réservation déjà annulée', 400);
+
+    const seatDiff = seats - booking.seats; // Si < 0, on libère des places. Si > 0, on en prend plus.
+    
+    if (seatDiff > 0 && booking.ride.availableSeats < seatDiff) {
+      throw new AppError(`Seulement ${booking.ride.availableSeats} place(s) restante(s)`, 400);
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedBooking = await tx.booking.update({
+        where: { id },
+        data: { seats }
+      });
+
+      const remainingSeats = booking.ride.availableSeats - seatDiff;
+      await tx.ride.update({
+        where: { id: booking.ride.id },
+        data: {
+          availableSeats: remainingSeats,
+          status: remainingSeats === 0 ? 'FULL' : 'OPEN'
+        }
+      });
+
+      return updatedBooking;
+    });
+
+    res.json({ success: true, message: 'Réservation modifiée', data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============ ANNULER UNE RÉSERVATION ============
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      include: { ride: true }
+    });
+
+    if (!booking) throw new AppError('Réservation non trouvée', 404);
+    if (booking.passengerId !== userId) throw new AppError('Non autorisé', 403);
+    if (booking.status === 'CANCELLED') throw new AppError('Réservation déjà annulée', 400);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.booking.update({
+        where: { id },
+        data: { status: 'CANCELLED' }
+      });
+
+      const restoredSeats = booking.ride.availableSeats + booking.seats;
+      await tx.ride.update({
+        where: { id: booking.ride.id },
+        data: {
+          availableSeats: restoredSeats,
+          status: 'OPEN' // re-ouvre le trajet automatiquement s'il était complet
+        }
+      });
+
+      await tx.notification.create({
+        data: {
+          userId: booking.ride.driverId,
+          type: 'BOOKING_CANCELLED',
+          title: 'Réservation annulée',
+          message: `Un passager a annulé sa réservation de ${booking.seats} place(s) pour le trajet ${booking.ride.destinationCity}.`,
+          data: { bookingId: id }
+        }
+      });
+    });
+
+    res.json({ success: true, message: 'Réservation annulée' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ============ CONFIRMER UNE RÉSERVATION ============
 router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res, next) => {
   try {

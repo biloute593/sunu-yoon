@@ -66,7 +66,7 @@ class SocketService {
       console.log('🔌 WebSocket déconnecté');
     });
 
-    this.socket.on('connect_error', (error) => {
+    this.socket.on('connect_error', (error: Error) => {
       console.error('Erreur WebSocket:', error.message);
     });
 
@@ -76,11 +76,11 @@ class SocketService {
     });
 
     // Écouter les indicateurs de frappe
-    this.socket.on('user_typing', (data) => {
+    this.socket.on('user_typing', (data: any) => {
       this.typingListeners.forEach(callback => callback({ ...data, isTyping: true }));
     });
 
-    this.socket.on('user_stopped_typing', (data) => {
+    this.socket.on('user_stopped_typing', (data: any) => {
       this.typingListeners.forEach(callback => callback({ ...data, isTyping: false }));
     });
   }

@@ -204,49 +204,77 @@ router.post('/:requestId/accept', requireAuth, async (req, res, next) => {
       });
     }
 
-    const updated = await prisma.rideRequest.update({
-      where: { id: requestId },
-      data: {
-        status: 'ACCEPTED',
-        acceptedByDriverId: userId
-      },
-      include: {
-        passenger: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            avatarUrl: true
-          }
+    const result = await prisma.$transaction(async (tx) => {
+      // Mettre à jour la requête
+      const updatedRequest = await tx.rideRequest.update({
+        where: { id: requestId },
+        data: {
+          status: 'ACCEPTED',
+          acceptedByDriverId: userId
         },
-        acceptedByDriver: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            avatarUrl: true,
-            rating: true,
-            carModel: true
+        include: {
+          passenger: {
+            select: { id: true, name: true, phone: true, avatarUrl: true }
+          },
+          acceptedByDriver: {
+            select: { id: true, name: true, phone: true, avatarUrl: true, rating: true, carModel: true }
           }
         }
-      }
-    });
+      });
 
-    // Créer notification pour le passager
-    await prisma.notification.create({
-      data: {
-        userId: request.passengerId,
-        type: 'REQUEST_ACCEPTED',
-        title: 'Demande acceptée',
-        message: `Un conducteur a accepté votre demande ${request.originCity} → ${request.destinationCity}`,
-        data: { requestId: request.id }
-      }
+      // Calculer une durée/distance (simplifiée par défaut ou avec la fonction estimate si elle était dispo côté backend)
+      // Pour le backend on fixe par défaut à 180min si on n'a pas accès à utils/cities
+      const estimatedDuration = 180;
+      const distance = 0;
+
+      // 1. Créer le Trajet (Ride) pour le chauffeur
+      const newRide = await tx.ride.create({
+        data: {
+          driverId: userId,
+          originCity: request.originCity,
+          originAddress: request.originCity,
+          destinationCity: request.destinationCity,
+          destinationAddress: request.destinationCity,
+          departureTime: request.departureDate,
+          estimatedDuration,
+          distance,
+          pricePerSeat: request.maxPricePerSeat || 1000,
+          totalSeats: request.seats,
+          availableSeats: 0, // Réservé par la demande
+          features: [],
+          description: `Trajet créé pour la demande de ${updatedRequest.passenger.name}`,
+          status: 'FULL'
+        }
+      });
+
+      // 2. Créer la Réservation (Booking) confirmée pour le passager
+      const booking = await tx.booking.create({
+        data: {
+          rideId: newRide.id,
+          passengerId: request.passengerId,
+          seats: request.seats,
+          status: 'CONFIRMED'
+        }
+      });
+
+      // Créer notification pour le passager
+      await tx.notification.create({
+        data: {
+          userId: request.passengerId,
+          type: 'REQUEST_ACCEPTED',
+          title: 'Demande acceptée !',
+          message: `${updatedRequest.acceptedByDriver?.name} a accepté votre demande vers ${request.destinationCity}. La réservation a été créée.`,
+          data: { requestId: request.id, bookingId: booking.id, rideId: newRide.id }
+        }
+      });
+
+      return updatedRequest;
     });
 
     res.json({
       success: true,
-      message: 'Demande acceptée',
-      data: updated
+      message: 'Demande acceptée et trajet créé',
+      data: result
     });
   } catch (error) {
     next(error);

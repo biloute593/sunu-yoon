@@ -1,4 +1,5 @@
 import { ApiClient } from './apiClient';
+import { estimateTravelDuration } from '../utils/cities';
 
 export interface RideDriver {
   id: string;
@@ -138,7 +139,9 @@ class RideService {
   // Créer un trajet
   async createRide(data: CreateRideData): Promise<Ride> {
     try {
-      // Mapping pour correspondre à l'API backend
+      // Calculer la distance et durée réelles entre les villes
+      const travel = estimateTravelDuration(data.origin, data.destination);
+
       const apiData = {
         originCity: data.origin,
         originAddress: data.origin,
@@ -150,8 +153,8 @@ class RideService {
         availableSeats: data.seatsAvailable,
         description: data.description || '',
         features: data.features || [],
-        estimatedDuration: 180,
-        distance: 0,
+        estimatedDuration: travel.durationMinutes,
+        distance: travel.distanceKm,
         // Pour les utilisateurs non connectés
         ...(data.driver ? {
           driverName: data.driver.name,

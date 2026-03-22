@@ -1,0 +1,5 @@
+﻿services/api.ts(1,35): error TS2307: Cannot find module '@google/genai' or its corresponding type declarations.
+services/messageService.ts(1,28): error TS2307: Cannot find module 'socket.io-client' or its corresponding type declarations.
+services/messageService.ts(69,38): error TS7006: Parameter 'error' implicitly has an 'any' type.
+services/messageService.ts(79,36): error TS7006: Parameter 'data' implicitly has an 'any' type.
+services/messageService.ts(83,44): error TS7006: Parameter 'data' implicitly has an 'any' type.
