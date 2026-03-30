@@ -96,13 +96,20 @@ function AppContent() {
     if (currentView === 'home') {
       const loadRecentRides = async () => {
         try {
-          console.log('Chargement des trajets récents...');
-          // Utiliser la nouvelle méthode getRecentRides
           const rides = await rideService.getRecentRides(6);
-          console.log(`${rides.length} trajet(s) chargé(s)`);
-          setRecentRides(rides.slice(0, 6).map(mapApiRideToRide));
+          // Map each ride safely — skip any that fail
+          const mapped = rides.slice(0, 6).reduce<Ride[]>((acc, ride) => {
+            try {
+              acc.push(mapApiRideToRide(ride));
+            } catch (e) {
+              console.warn('Ride mapping failed, skipping:', e, ride);
+            }
+            return acc;
+          }, []);
+          setRecentRides(mapped);
         } catch (error) {
           console.error('Error loading recent rides:', error);
+          setRecentRides([]);
         }
       };
       loadRecentRides();
@@ -202,7 +209,12 @@ function AppContent() {
         seats: params.passengers
       });
 
-      setSearchResults(rides.map(mapApiRideToRide));
+      // Map each ride safely
+      const mapped = rides.reduce<Ride[]>((acc, ride) => {
+        try { acc.push(mapApiRideToRide(ride)); } catch (e) { console.warn('Search ride mapping failed:', e); }
+        return acc;
+      }, []);
+      setSearchResults(mapped);
       setCurrentView('search');
     } catch (error) {
       console.error('Erreur recherche:', error);
@@ -239,7 +251,11 @@ function AppContent() {
     try {
       setHomeRefreshKey(prev => prev + 1);
       const rides = await rideService.getRecentRides(6);
-      setRecentRides(rides.map(mapApiRideToRide));
+      const mapped = rides.reduce<Ride[]>((acc, ride) => {
+        try { acc.push(mapApiRideToRide(ride)); } catch (e) { console.warn('Publish refresh mapping failed:', e); }
+        return acc;
+      }, []);
+      setRecentRides(mapped);
     } catch (e) {
       console.error('Erreur rechargement trajets récents:', e);
     }
