@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:netlify": "netlify dev",
-    "build": "prisma generate && tsc && vite build",
+    "build": "tsc && vite build",
     "postinstall": "prisma generate",
     "lint": "eslint . --ext ts,tsx,js,cjs --report-unused-disable-directives",
     "test:logic": "cross-env ALLOW_VERIFY_LOGIC=true node scripts/verify-logic.cjs",

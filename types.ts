@@ -69,7 +69,7 @@ export interface FrontendRide {
 
 export interface Ride {
   id: string;
-  driver: User;
+  driver: RideDriver;
   origin: string;
   destination: string;
   departureTime: string;
@@ -83,6 +83,14 @@ export interface Ride {
   duration: string;
   status: string;
   createdAt: string;
+}
+
+export interface SearchParams {
+  origin: string;
+  destination: string;
+  date: string;
+  passengers: number;
+  userLocation?: Coordinates;
 }
 
 export type RideStatus = 'active' | 'completed' | 'cancelled';

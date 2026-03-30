@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
 import { TokenManager } from '../services/apiClient';
 
@@ -29,7 +29,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       try {
         // Restaurer l'utilisateur depuis localStorage pour une UX immédiate
-        // L'idéal serait de valider le token avec un appel /auth/me
         const storedUser = localStorage.getItem('sunu_yoon_user');
         if (storedUser) {
           setUser(JSON.parse(storedUser));
@@ -45,25 +44,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadUser();
   }, []);
 
-  const login = (userData: User, tokens?: { accessToken: string; refreshToken: string }) => {
+  const login = useCallback((userData: User, tokens?: { accessToken: string; refreshToken: string }) => {
     setUser(userData);
     localStorage.setItem('sunu_yoon_user', JSON.stringify(userData));
 
     if (tokens) {
       TokenManager.setTokens(tokens.accessToken, tokens.refreshToken);
     }
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem('sunu_yoon_user');
     TokenManager.clearTokens();
     // Recharger la page pour nettoyer tous les états
     window.location.href = '/';
-  };
+  }, []);
+
+  // isAuthenticated is derived from reactive state, NOT from TokenManager.isAuthenticated()
+  // This prevents the "s is not a function" crash in production minified builds
+  const isAuthenticated = user !== null && !!TokenManager.getAccessToken();
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: TokenManager.isAuthenticated(), isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
