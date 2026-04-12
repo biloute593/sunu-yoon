@@ -1801,9 +1801,17 @@ function AppContent() {
                </div>
             </div>
             
-            <div className="px-4 pb-20 mt-8">
+            <div className="px-4 pb-20">
+               {/* Formulaire de recherche placé en premier pour qu'il chevauche correctement le hero avec son mt négatif */}
+               <SearchForm 
+                 onSearch={handleSearch} 
+                 isLoading={isLoading} 
+                 onLocate={handleGeolocate} 
+                 userLocation={userLocation}
+               />
+
                {/* Actions rapides */}
-               <div className="max-w-4xl mx-auto mb-8">
+               <div className="max-w-4xl mx-auto mt-12 mb-8">
                  <div className="grid grid-cols-2 gap-4">
                    <button
                      onClick={() => setCurrentView('publish')}
@@ -1821,14 +1829,6 @@ function AppContent() {
                    </button>
                  </div>
                </div>
-
-               {/* Formulaire de recherche */}
-               <SearchForm 
-                 onSearch={handleSearch} 
-                 isLoading={isLoading} 
-                 onLocate={handleGeolocate} 
-                 userLocation={userLocation}
-               />
             </div>
           </>
         );

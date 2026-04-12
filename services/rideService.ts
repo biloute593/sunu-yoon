@@ -153,9 +153,15 @@ class RideService {
       if (params.date) queryParams.append('date', params.date);
       if (params.seats) queryParams.append('seats', params.seats.toString());
 
+      // Timeout de 12s pour détecter le backend en veille (Render free tier)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+
       const response = await fetch(`${API_URL}/rides?${queryParams.toString()}`, {
-        method: 'GET'
+        method: 'GET',
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         console.error('Search rides failed:', response.status);
@@ -166,9 +172,12 @@ class RideService {
       const rides = Array.isArray(payload?.data?.rides) ? payload.data.rides : [];
       saveCachedResult(cacheKey, rides);
       return rides;
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        throw new Error('Failed to fetch: Le serveur met trop de temps à répondre (backend en veille)');
+      }
       console.error('Search rides error:', error);
-      return [];
+      throw error;
     }
   }
 
