@@ -200,16 +200,22 @@ class RideService {
   }
 
   async createRide(data: CreateRideData): Promise<Ride> {
-    const response = await fetch(`${API_URL}/rides`, {
-      method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(data)
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      throw new Error(errorBody.message || 'Erreur lors de la création du trajet');
-    }
+    try {
+      const response = await fetch(`${API_URL}/rides`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(data),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.message || 'Erreur lors de la création du trajet');
+      }
 
     const payload: ApiResponse<{ ride: Ride }> = await response.json();
     searchCache.clear();
@@ -217,19 +223,30 @@ class RideService {
       throw new Error('Réponse invalide du serveur.');
     }
     return payload.data.ride;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps à répondre (en veille). Réessayez.');
+      throw error;
+    }
   }
 
   async createGuestRide(data: CreateGuestRideData): Promise<Ride> {
-    const response = await fetch(`${API_URL}/rides/guest`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      throw new Error(errorBody.message || 'Erreur lors de la publication du trajet');
-    }
+    try {
+      const response = await fetch(`${API_URL}/rides/guest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.message || 'Erreur lors de la publication du trajet');
+      }
 
     const payload: ApiResponse<{ ride: Ride }> = await response.json();
     // Invalider le cache car un nouveau trajet vient d'être publié
@@ -238,6 +255,11 @@ class RideService {
       throw new Error('Réponse invalide du serveur.');
     }
     return payload.data.ride;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps à répondre (en veille). Réessayez.');
+      throw error;
+    }
   }
 
   async getMyRides(): Promise<Ride[]> {
@@ -276,19 +298,30 @@ class RideService {
   }
 
   async bookRide(rideId: string, seats: number = 1): Promise<{ bookingId: string }> {
-    const response = await fetch(`${API_URL}/bookings`, {
-      method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify({ rideId, seats })
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      throw new Error(errorBody.message || 'Erreur lors de la réservation');
-    }
+    try {
+      const response = await fetch(`${API_URL}/bookings`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ rideId, seats }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.message || 'Erreur lors de la réservation');
+      }
 
     searchCache.clear();
     return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps à répondre. Réessayez.');
+      throw error;
+    }
   }
 }
 
