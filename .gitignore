@@ -37,3 +37,6 @@ backend/node_modules
 backend/dist
 functions/node_modules
 functions/lib
+
+# Local Netlify folder
+.netlify

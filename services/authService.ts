@@ -1,7 +1,6 @@
-import { io, Socket } from 'socket.io-client';
-
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-const TOKEN_KEY = 'sunu_yoon_token';
+// Clés unifiées avec apiClient.ts pour éviter les incohérences
+const TOKEN_KEY = 'sunu_yoon_access_token';
 const REFRESH_TOKEN_KEY = 'sunu_yoon_refresh_token';
 const USER_KEY = 'sunu_yoon_user';
 
@@ -39,8 +38,6 @@ export interface AuthResponse {
 }
 
 class AuthService {
-  private socket: Socket | null = null;
-
   // Récupérer le token d'accès
   getToken(): string | null {
     return localStorage.getItem(TOKEN_KEY);
@@ -82,10 +79,6 @@ class AuthService {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
   }
 
   // Headers avec authentification
@@ -267,25 +260,6 @@ class AuthService {
     }
   }
 
-  // Connexion Socket.io
-  connectSocket(): Socket | null {
-    if (this.socket) return this.socket;
-
-    const token = this.getToken();
-    if (!token) return null;
-
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
-    this.socket = io(socketUrl, {
-      auth: { token },
-      transports: ['websocket', 'polling']
-    });
-
-    return this.socket;
-  }
-
-  getSocket(): Socket | null {
-    return this.socket;
-  }
 }
 
 export const authService = new AuthService();

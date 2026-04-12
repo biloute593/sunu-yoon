@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import CookieBanner from './components/CookieBanner';
@@ -1620,8 +1620,10 @@ function AppContent() {
   const [searchResults, setSearchResults] = useState<Ride[]>([]);
   const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
+  const [sortBy, setSortBy] = useState<'departure' | 'price' | 'rating'>('departure');
   
   // Modals
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -1632,6 +1634,21 @@ function AppContent() {
   const [showRequestRide, setShowRequestRide] = useState(false);
   const [showDriverMode, setShowDriverMode] = useState(false);
   const [isDriverAvailable, setIsDriverAvailable] = useState(false);
+
+  // Résultats triés
+  const sortedResults = useMemo(() => {
+    const results = [...searchResults];
+    switch (sortBy) {
+      case 'price':
+        return results.sort((a, b) => a.price - b.price);
+      case 'rating':
+        return results.sort((a, b) => (b.driver.rating || 0) - (a.driver.rating || 0));
+      case 'departure':
+      default:
+        return results.sort((a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime());
+    }
+  }, [searchResults, sortBy]);
+
 
   // Geolocation State
   const [userLocation, setUserLocation] = useState<LocationState>({
@@ -1706,6 +1723,7 @@ function AppContent() {
 
   const handleSearch = async (params: SearchParams) => {
     setIsLoading(true);
+    setSearchError(null);
     setSearchParams(params);
 
     try {
@@ -1719,9 +1737,16 @@ function AppContent() {
       const apiRides = rides.map(mapApiRideToRide);
       setSearchResults(apiRides);
       setCurrentView('search');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur recherche:', error);
       setSearchResults([]);
+      // Afficher un message d'erreur exploitable (serveur en veille, etc.)
+      setSearchError(
+        error?.message?.includes('Failed to fetch') || error?.message?.includes('NetworkError')
+          ? 'Le serveur est temporairement indisponible. Veuillez réessayer dans quelques secondes (le backend se réveille...)⚡'
+          : 'Impossible de charger les trajets. Vérifiez votre connexion et réessayez.'
+      );
+      setCurrentView('search');
     } finally {
       setIsLoading(false);
     }
@@ -1823,12 +1848,16 @@ function AppContent() {
             <div className="mt-12 mb-12">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">
-                  {isLoading ? 'Recherche en cours...' : `${searchResults.length} trajet${searchResults.length > 1 ? 's' : ''} disponible${searchResults.length > 1 ? 's' : ''}`}
+                  {isLoading ? 'Recherche en cours...' : `${sortedResults.length} trajet${sortedResults.length > 1 ? 's' : ''} disponible${sortedResults.length > 1 ? 's' : ''}`}
                 </h2>
-                {searchResults.length > 0 && (
+                {sortedResults.length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-500">Trier par:</span>
-                    <select className="text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as 'departure' | 'price' | 'rating')}
+                      className="text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
                       <option value="departure">Heure de départ</option>
                       <option value="price">Prix croissant</option>
                       <option value="rating">Meilleures notes</option>
@@ -1838,7 +1867,7 @@ function AppContent() {
               </div>
               
               {/* Quick filters */}
-              {searchResults.length > 0 && (
+              {sortedResults.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-6">
                   <button className="px-3 py-1.5 text-sm font-medium bg-emerald-100 text-emerald-700 rounded-full hover:bg-emerald-200 transition-colors">
                     Tous
@@ -1852,6 +1881,23 @@ function AppContent() {
                   <button className="px-3 py-1.5 text-sm font-medium bg-white text-gray-600 border border-gray-200 rounded-full hover:border-emerald-300 hover:text-emerald-600 transition-colors">
                     ⭐ 4+ étoiles
                   </button>
+                </div>
+              )}
+              
+              {/* Message d'erreur serveur */}
+              {searchError && !isLoading && (
+                <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-5 py-4">
+                  <Icons.AlertCircle size={20} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800">Serveur temporairement indisponible</p>
+                    <p className="text-sm text-amber-700 mt-0.5">{searchError}</p>
+                    <button
+                      onClick={() => handleSearch(searchParams!)}
+                      className="mt-2 text-sm font-bold text-amber-700 underline hover:text-amber-900"
+                    >
+                      Réessayer
+                    </button>
+                  </div>
                 </div>
               )}
               
@@ -1878,10 +1924,10 @@ function AppContent() {
                  </div>
               ) : (
                 <div className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
-                  {searchResults.map(ride => (
+                  {sortedResults.map(ride => (
                     <RideCard key={ride.id} ride={ride} onClick={() => handleRideClick(ride)} />
                   ))}
-                  {searchResults.length === 0 && (
+                  {sortedResults.length === 0 && !searchError && (
                     <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200 col-span-full">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Icons.Search className="text-gray-400" size={28} />
