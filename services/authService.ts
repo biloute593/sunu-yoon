@@ -104,14 +104,38 @@ class AuthService {
         throw { response: { data: error } };
       }
 
-      const data: AuthResponse = await response.json();
+      const data = await response.json();
 
-      if (data.token && data.user) {
-        this.setTokens(data.token, data.refreshToken);
-        this.setCurrentUser(data.user);
+      // Supporter les deux formats: {token} et {tokens: {accessToken}}
+      const accessToken = data?.data?.tokens?.accessToken || data?.data?.token || data?.token;
+      const refreshToken = data?.data?.tokens?.refreshToken || data?.data?.refreshToken || data?.refreshToken;
+      const user = data?.data?.user || data?.user;
+
+      if (accessToken && user) {
+        this.setTokens(accessToken, refreshToken);
+        // Transformer le user pour compléter firstName/lastName si manquant
+        const authUser: AuthUser = {
+          id: user.id,
+          firstName: user.firstName || user.name?.split(' ')[0] || '',
+          lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
+          phone: user.phone,
+          email: user.email,
+          avatarUrl: user.avatarUrl,
+          rating: user.rating,
+          reviewCount: user.reviewCount,
+          isVerified: user.isVerified,
+          createdAt: user.createdAt || new Date().toISOString()
+        };
+        this.setCurrentUser(authUser);
       }
 
-      return data;
+      return {
+        user: data?.data?.user || data?.user,
+        token: accessToken,
+        refreshToken,
+        requiresVerification: data?.data?.verificationRequired || data?.requiresVerification || false,
+        message: data?.message
+      };
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -165,14 +189,36 @@ class AuthService {
         throw { response: { data: error } };
       }
 
-      const data: AuthResponse = await response.json();
+      const data = await response.json();
 
-      if (data.token && data.user) {
-        this.setTokens(data.token, data.refreshToken);
-        this.setCurrentUser(data.user);
+      const accessToken = data?.data?.tokens?.accessToken || data?.data?.token || data?.token;
+      const refreshToken = data?.data?.tokens?.refreshToken || data?.data?.refreshToken || data?.refreshToken;
+      const user = data?.data?.user || data?.user;
+
+      if (accessToken && user) {
+        this.setTokens(accessToken, refreshToken);
+        const authUser: AuthUser = {
+          id: user.id,
+          firstName: user.firstName || user.name?.split(' ')[0] || '',
+          lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
+          phone: user.phone,
+          email: user.email,
+          avatarUrl: user.avatarUrl,
+          rating: user.rating,
+          reviewCount: user.reviewCount,
+          isVerified: user.isVerified,
+          createdAt: user.createdAt || new Date().toISOString()
+        };
+        this.setCurrentUser(authUser);
       }
 
-      return data;
+      return {
+        user: user,
+        token: accessToken,
+        refreshToken,
+        requiresVerification: data?.data?.verificationRequired || false,
+        message: data?.message
+      };
     } catch (error) {
       console.error('Verify error:', error);
       throw error;

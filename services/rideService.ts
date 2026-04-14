@@ -125,7 +125,8 @@ interface ApiResponse<T> {
 class RideService {
   private getToken(): string | null {
     try {
-      return localStorage.getItem('sunu_yoon_token');
+      // Clé unifiée avec authService.ts
+      return localStorage.getItem('sunu_yoon_access_token');
     } catch {
       return null;
     }

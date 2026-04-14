@@ -73,19 +73,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await authService.login(credentials);
       
       if (response.requiresVerification) {
+        // Garder user en attente de vérification
+        if (response.user) {
+          setUser(response.user as any);
+        }
         return { success: true, requiresVerification: true };
       }
       
       if (response.user) {
-        setUser(response.user);
+        setUser(response.user as any);
       }
       
       return { success: true };
     } catch (error: any) {
       console.error('Erreur de connexion:', error);
+      const msg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Erreur de connexion. Vérifiez vos identifiants.';
       return { 
         success: false, 
-        error: error.response?.data?.error || 'Erreur de connexion. Vérifiez vos identifiants.' 
+        error: msg
       };
     } finally {
       setIsLoading(false);
@@ -97,13 +102,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       const response = await authService.register(data);
       
-      // L'inscription nécessite toujours une vérification
+      // Stocker le user si renvoyé (même sans vérification complète)
+      if (response.user) {
+        setUser(response.user as any);
+      }
+      
       return { success: true, requiresVerification: true };
     } catch (error: any) {
       console.error('Erreur d\'inscription:', error);
+      const msg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Erreur lors de l\'inscription.';
       return { 
         success: false, 
-        error: error.response?.data?.error || 'Erreur lors de l\'inscription.' 
+        error: msg
       };
     } finally {
       setIsLoading(false);

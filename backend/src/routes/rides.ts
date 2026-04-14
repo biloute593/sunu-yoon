@@ -123,6 +123,41 @@ router.get('/',
   }
 );
 
+// ============ MES TRAJETS (CONDUCTEUR) - DOIT ÊTRE AVANT /:id ============
+router.get('/my-rides',
+  authMiddleware,
+  async (req: AuthRequest, res, next) => {
+    try {
+      const userId = req.user!.id;
+
+      const rides = await prisma.ride.findMany({
+        where: { driverId: userId },
+        include: {
+          driver: {
+            select: { id: true, name: true, avatarUrl: true, rating: true, reviewCount: true, isVerified: true, carModel: true }
+          },
+          bookings: {
+            where: { status: { in: ['CONFIRMED', 'PENDING'] } },
+            include: {
+              passenger: {
+                select: { id: true, name: true, avatarUrl: true }
+              }
+            }
+          }
+        },
+        orderBy: { departureTime: 'desc' }
+      });
+
+      res.json({
+        success: true,
+        data: { rides: rides.map(mapRegisteredRide) }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // ============ DÉTAILS D'UN TRAJET (PUBLIC) ============
 router.get('/:id', optionalAuth, async (req: AuthRequest, res, next) => {
   try {
@@ -479,38 +514,6 @@ router.post('/:id/cancel',
       res.json({
         success: true,
         message: 'Trajet annulé. Les passagers seront notifiés.'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// ============ MES TRAJETS (CONDUCTEUR) ============
-router.get('/my-rides',
-  authMiddleware,
-  async (req: AuthRequest, res, next) => {
-    try {
-      const userId = req.user!.id;
-
-      const rides = await prisma.ride.findMany({
-        where: { driverId: userId },
-        include: {
-          bookings: {
-            where: { status: { in: ['CONFIRMED', 'PENDING'] } },
-            include: {
-              passenger: {
-                select: { id: true, name: true, avatarUrl: true }
-              }
-            }
-          }
-        },
-        orderBy: { departureTime: 'desc' }
-      });
-
-      res.json({
-        success: true,
-        data: { rides }
       });
     } catch (error) {
       next(error);

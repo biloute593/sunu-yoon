@@ -51,16 +51,18 @@ const BookingModal: React.FC<BookingModalProps> = ({
 
   const handleSelectSeats = () => {
     const name = passengerName.trim();
-    const phone = passengerPhone.trim();
+    const phoneStr = passengerPhone.trim();
     
     if (!name || name.length < 2) {
       setFormError('Merci de renseigner votre nom complet (minimum 2 caractères).');
       return;
     }
     
-    const phoneRegex = /^(\+221|00221)?[7][0-9]{8}$/;
-    if (!phone || !phoneRegex.test(phone)) {
-      setFormError('Numéro invalide. Utilisez un numéro sénégalais (ex: 771234567).');
+    // Nettoyer les espaces, tirets et points pour la validation
+    const cleanedPhone = phoneStr.replace(/[\s\-\.]/g, '');
+    const phoneRegex = /^(\+221|00221|221)?[7][0-9]{8}$/;
+    if (!phoneStr || !phoneRegex.test(cleanedPhone)) {
+      setFormError('Numéro invalide. Utilisez un numéro sénégalais (ex: 77 123 45 67).');
       return;
     }
     

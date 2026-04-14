@@ -1649,6 +1649,27 @@ function AppContent() {
     }
   }, [searchResults, sortBy]);
 
+  // Trajets récents pour l'accueil
+  const [recentRides, setRecentRides] = useState<Ride[]>([]);
+  const [recentRidesLoading, setRecentRidesLoading] = useState(false);
+
+  const loadRecentRides = useCallback(async () => {
+    setRecentRidesLoading(true);
+    try {
+      const rides = await rideService.searchRides({});
+      setRecentRides(rides.map(mapApiRideToRide).slice(0, 6));
+    } catch (error) {
+      console.log('Impossible de charger les trajets récents:', error);
+    } finally {
+      setRecentRidesLoading(false);
+    }
+  }, []);
+
+  // Charger les trajets récents au démarrage
+  useEffect(() => {
+    loadRecentRides();
+  }, [loadRecentRides]);
+
 
   // Geolocation State
   const [userLocation, setUserLocation] = useState<LocationState>({
@@ -1766,6 +1787,8 @@ function AppContent() {
 
   const handlePublishRide = (apiRide: ApiRide) => {
     const ride = mapApiRideToRide(apiRide);
+    // Invalider le cache et ajouter le nouveau trajet dans les résultats
+    setSearchResults(prev => [ride, ...prev.filter(r => r.id !== ride.id)]);
     setSearchParams({
       origin: ride.origin,
       destination: ride.destination,
@@ -1773,9 +1796,10 @@ function AppContent() {
       passengers: searchParams?.passengers || 1,
       userLocation: userLocation.coords || undefined
     });
-    setSearchResults(prev => [ride, ...prev.filter(r => r.id !== ride.id)]);
     setSelectedRide(ride);
-    setCurrentView('search');
+    // Recharger les trajets récents et afficher la page de détails
+    loadRecentRides();
+    setCurrentView('ride-details');
     setProfileRefreshKey(prev => prev + 1);
   };
 
@@ -1828,6 +1852,51 @@ function AppContent() {
                      <span>Trouver un trajet</span>
                    </button>
                  </div>
+               </div>
+
+               {/* Trajets disponibles */}
+               <div className="max-w-4xl mx-auto mt-4 mb-12">
+                 <div className="flex items-center justify-between mb-6">
+                   <h2 className="text-xl font-bold text-gray-900">Trajets disponibles</h2>
+                   {recentRides.length > 0 && (
+                     <button
+                       onClick={() => handleSearch({ origin: '', destination: '', date: new Date().toISOString().split('T')[0], passengers: 1 })}
+                       className="text-sm text-emerald-600 font-medium hover:underline"
+                     >
+                       Voir tous les trajets
+                     </button>
+                   )}
+                 </div>
+
+                 {recentRidesLoading ? (
+                   <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                     {[1,2,3].map(i => (
+                       <div key={i} className="min-h-[220px] bg-white rounded-2xl border border-gray-100 p-6 animate-pulse">
+                         <div className="h-5 bg-gray-200 rounded w-1/2 mb-4"></div>
+                         <div className="h-4 bg-gray-100 rounded w-3/4 mb-2"></div>
+                         <div className="h-4 bg-gray-100 rounded w-2/3"></div>
+                       </div>
+                     ))}
+                   </div>
+                 ) : recentRides.length === 0 ? (
+                   <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                     <Icons.Car className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                     <p className="text-gray-500">Aucun trajet disponible pour le moment.</p>
+                     <button
+                       onClick={() => setCurrentView('publish')}
+                       className="mt-4 inline-flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
+                     >
+                       <Icons.PlusCircle size={16} />
+                       Soyez le premier à proposer un trajet
+                     </button>
+                   </div>
+                 ) : (
+                   <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                     {recentRides.map(ride => (
+                       <RideCard key={ride.id} ride={ride} onClick={() => handleRideClick(ride)} />
+                     ))}
+                   </div>
+                 )}
                </div>
             </div>
           </>
