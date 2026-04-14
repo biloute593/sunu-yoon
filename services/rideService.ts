@@ -154,9 +154,9 @@ class RideService {
       if (params.date) queryParams.append('date', params.date);
       if (params.seats) queryParams.append('seats', params.seats.toString());
 
-      // Timeout de 12s pour détecter le backend en veille (Render free tier)
+      // Timeout de 60s pour détecter le backend en veille (Render free tier)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
       const response = await fetch(`${API_URL}/rides?${queryParams.toString()}`, {
         method: 'GET',
@@ -202,7 +202,7 @@ class RideService {
 
   async createRide(data: CreateRideData): Promise<Ride> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
       const response = await fetch(`${API_URL}/rides`, {
@@ -233,7 +233,7 @@ class RideService {
 
   async createGuestRide(data: CreateGuestRideData): Promise<Ride> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
       const response = await fetch(`${API_URL}/rides/guest`, {
@@ -300,7 +300,7 @@ class RideService {
 
   async bookRide(rideId: string, seats: number = 1): Promise<{ bookingId: string }> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
       const response = await fetch(`${API_URL}/bookings`, {
