@@ -33,6 +33,8 @@ const httpServer = createServer(app);
 // Origines autorisées pour CORS
 const allowedOrigins = [
   process.env.FRONTEND_URL,
+  'https://sunuyoon.net',
+  'https://www.sunuyoon.net',
   'https://sunu-yoon-app.web.app',
   'https://sunu-yoon-app.firebaseapp.com',
   'http://localhost:5173',
