@@ -29,9 +29,19 @@ dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
+
+// Origines autorisées pour CORS
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'https://sunu-yoon-app.web.app',
+  'https://sunu-yoon-app.firebaseapp.com',
+  'http://localhost:5173',
+  'http://localhost:3000'
+].filter(Boolean) as string[];
+
 const io = new SocketServer(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -43,7 +53,7 @@ export const prisma = new PrismaClient();
 // Middleware de base
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: allowedOrigins,
   credentials: true
 }));
 app.use(express.json());
@@ -88,44 +98,57 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// DB diagnostic (temporary)
+app.get('/health/db', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ db: 'connected', timestamp: new Date().toISOString() });
+  } catch (err: any) {
+    res.status(500).json({ db: 'error', message: err.message, code: err.code });
+  }
+});
+
 // Gestion des erreurs
 app.use(errorHandler);
 
 // Setup WebSocket
 setupSocketHandlers(io);
 
-// Export pour les tests et autres modules
+// Export pour Vercel serverless et tests
 export { io };
+export default app;
 
-// Démarrage du serveur
-const PORT = process.env.PORT || 3001;
+// Démarrage du serveur (mode non-serverless uniquement)
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 3001;
 
-httpServer.listen(PORT, () => {
-  logger.info(`🚀 Serveur Sunu Yoon démarré sur le port ${PORT}`);
-  logger.info(`📡 WebSocket prêt pour les connexions`);
+  httpServer.listen(PORT, () => {
+    logger.info(`🚀 Serveur Sunu Yoon démarré sur le port ${PORT}`);
+    logger.info(`📡 WebSocket prêt pour les connexions`);
 
-  // Self-ping : empêche Render de mettre le serveur en veille
-  if (process.env.NODE_ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
-    const SELF_PING_INTERVAL = 10 * 60 * 1000; // 10 minutes
-    setInterval(async () => {
-      try {
-        const url = `${process.env.RENDER_EXTERNAL_URL}/health`;
-        const res = await fetch(url);
-        logger.info(`[Keep-Alive] Ping ${url} → ${res.status}`);
-      } catch (err) {
-        logger.warn(`[Keep-Alive] Ping échoué: ${err}`);
-      }
-    }, SELF_PING_INTERVAL);
-    logger.info(`🔄 Keep-alive activé (ping toutes les 10 min)`);
-  }
-});
-
-// Gestion propre de l'arrêt
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM reçu, arrêt gracieux...');
-  await prisma.$disconnect();
-  httpServer.close(() => {
-    logger.info('Serveur arrêté');
-    process.exit(0);
+    // Self-ping : empêche Render de mettre le serveur en veille
+    if (process.env.NODE_ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
+      const SELF_PING_INTERVAL = 10 * 60 * 1000; // 10 minutes
+      setInterval(async () => {
+        try {
+          const url = `${process.env.RENDER_EXTERNAL_URL}/health`;
+          const res = await fetch(url);
+          logger.info(`[Keep-Alive] Ping ${url} → ${res.status}`);
+        } catch (err) {
+          logger.warn(`[Keep-Alive] Ping échoué: ${err}`);
+        }
+      }, SELF_PING_INTERVAL);
+      logger.info(`🔄 Keep-alive activé (ping toutes les 10 min)`);
+    }
   });
-});
+
+  // Gestion propre de l'arrêt
+  process.on('SIGTERM', async () => {
+    logger.info('SIGTERM reçu, arrêt gracieux...');
+    await prisma.$disconnect();
+    httpServer.close(() => {
+      logger.info('Serveur arrêté');
+      process.exit(0);
+    });
+  });
+}
