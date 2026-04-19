@@ -23,7 +23,9 @@ services:
       - key: JWT_REFRESH_EXPIRES_IN
         value: 7d
       - key: FRONTEND_URL
-        value: https://sunu-yoon.onrender.com
+        value: https://sunu-yoon-app.web.app
+      - key: RENDER_EXTERNAL_URL
+        value: https://sunu-yoon-backend.onrender.com
       - key: PORT
         value: 3001
 

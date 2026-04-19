@@ -827,7 +827,7 @@ const PublishForm: React.FC<{
     destination: '',
     date: new Date().toISOString().split('T')[0],
     time: '08:00',
-    price: 3500,
+    price: 1000,
     seats: 3,
     carModel: '',
     description: '',
@@ -865,7 +865,7 @@ const PublishForm: React.FC<{
       formData.destination.trim().length > 0 &&
       formData.date &&
       formData.time &&
-      formData.price >= 500 &&
+      formData.price >= 100 &&
       formData.seats >= 1;
     if (!baseValid) {
       return false;
@@ -1135,14 +1135,14 @@ const PublishForm: React.FC<{
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => handleChange('price', Math.max(500, formData.price - 500))}
+                    onClick={() => handleChange('price', Math.max(100, formData.price - 100))}
                     className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
                   >
                     -
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleChange('price', formData.price + 500)}
+                    onClick={() => handleChange('price', formData.price + 100)}
                     className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
                   >
                     +
@@ -1164,8 +1164,8 @@ const PublishForm: React.FC<{
                     }}
                     onBlur={(e) => {
                       const value = Number(e.target.value);
-                      if (!value || value < 500) {
-                        handleChange('price', 500);
+                      if (!value || value < 100) {
+                        handleChange('price', 100);
                       }
                     }}
                     placeholder="Ex: 2500"
@@ -1362,14 +1362,14 @@ const PublishForm: React.FC<{
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => handleChange('price', Math.max(500, formData.price - 500))}
+                    onClick={() => handleChange('price', Math.max(100, formData.price - 100))}
                     className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
                   >
                     -
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleChange('price', formData.price + 500)}
+                    onClick={() => handleChange('price', formData.price + 100)}
                     className="w-10 h-10 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:border-emerald-500 hover:bg-emerald-50 transition-all transform active:scale-95"
                   >
                     +
@@ -1391,8 +1391,8 @@ const PublishForm: React.FC<{
                     }}
                     onBlur={(e) => {
                       const value = Number(e.target.value);
-                      if (!value || value < 500) {
-                        handleChange('price', 500);
+                      if (!value || value < 100) {
+                        handleChange('price', 100);
                       }
                     }}
                     placeholder="Ex: 2500"

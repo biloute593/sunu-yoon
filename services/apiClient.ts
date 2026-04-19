@@ -1,15 +1,29 @@
 // Configuration de l'API
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-const API_TIMEOUT = 15000; // 15 secondes
+const API_TIMEOUT = 30000; // 30 secondes
 
-// Helper pour ajouter timeout aux fetch
-const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout = API_TIMEOUT): Promise<Response> => {
-  return Promise.race([
-    fetch(url, options),
-    new Promise<Response>((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout: Requête trop longue')), timeout)
-    )
-  ]);
+// Warm-up : réveille le serveur dès le chargement de l'app
+const HEALTH_URL = API_BASE_URL.replace(/\/api$/, '') + '/health';
+fetch(HEALTH_URL).catch(() => {});
+
+// Helper pour ajouter timeout aux fetch avec retry automatique
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = API_TIMEOUT, retries = 2): Promise<Response> => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await Promise.race([
+        fetch(url, options),
+        new Promise<Response>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout: Requête trop longue')), timeout)
+        )
+      ]);
+      return response;
+    } catch (error) {
+      if (attempt === retries) throw error;
+      // Attendre avant de réessayer (backoff exponentiel)
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  throw new Error('Échec après plusieurs tentatives');
 };
 
 // Types pour les réponses API

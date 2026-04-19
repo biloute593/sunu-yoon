@@ -1,0 +1,25 @@
+name: Keep Backend Alive
+
+on:
+  schedule:
+    # Ping toutes les 14 minutes (limite GitHub Actions: max 1 cron/5min)
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Permet de lancer manuellement
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Backend Health
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://sunu-yoon-backend.onrender.com/health || echo "000")
+          echo "Health check response: $response"
+          if [ "$response" = "200" ]; then
+            echo "✅ Backend is alive"
+          else
+            echo "⚠️ Backend returned $response - may be waking up"
+            # Retry after 30s if first attempt fails (cold start)
+            sleep 30
+            response2=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 https://sunu-yoon-backend.onrender.com/health || echo "000")
+            echo "Retry response: $response2"
+          fi

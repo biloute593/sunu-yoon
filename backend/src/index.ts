@@ -103,6 +103,21 @@ const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {
   logger.info(`🚀 Serveur Sunu Yoon démarré sur le port ${PORT}`);
   logger.info(`📡 WebSocket prêt pour les connexions`);
+
+  // Self-ping : empêche Render de mettre le serveur en veille
+  if (process.env.NODE_ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
+    const SELF_PING_INTERVAL = 10 * 60 * 1000; // 10 minutes
+    setInterval(async () => {
+      try {
+        const url = `${process.env.RENDER_EXTERNAL_URL}/health`;
+        const res = await fetch(url);
+        logger.info(`[Keep-Alive] Ping ${url} → ${res.status}`);
+      } catch (err) {
+        logger.warn(`[Keep-Alive] Ping échoué: ${err}`);
+      }
+    }, SELF_PING_INTERVAL);
+    logger.info(`🔄 Keep-alive activé (ping toutes les 10 min)`);
+  }
 });
 
 // Gestion propre de l'arrêt

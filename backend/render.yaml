@@ -24,5 +24,7 @@ services:
         value: 7d
       - key: FRONTEND_URL
         value: https://sunu-yoon-app.web.app
+      - key: RENDER_EXTERNAL_URL
+        value: https://sunu-yoon-backend.onrender.com
       - key: PORT
         value: 10000

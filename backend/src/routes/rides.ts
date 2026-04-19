@@ -255,7 +255,7 @@ router.post('/',
   body('originCity').notEmpty().withMessage('Ville de départ requise'),
   body('destinationCity').notEmpty().withMessage('Ville de destination requise'),
   body('departureTime').isISO8601().withMessage('Date de départ invalide'),
-  body('pricePerSeat').isInt({ min: 500 }).withMessage('Prix minimum: 500 FCFA'),
+  body('pricePerSeat').isInt({ min: 100 }).withMessage('Prix minimum: 100 FCFA'),
   body('totalSeats').isInt({ min: 1, max: 8 }).withMessage('Nombre de places invalide (1-8)'),
   body('features').optional().isArray().withMessage('Features doit être un tableau'),
   async (req: AuthRequest, res, next) => {
