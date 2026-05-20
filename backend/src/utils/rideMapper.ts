@@ -48,6 +48,12 @@ const buildGuestContact = (rawPhone: string) => {
 
 type RideWithDriver = Ride & {
   driver: Pick<User, 'id' | 'name' | 'avatarUrl' | 'rating' | 'reviewCount' | 'isVerified' | 'carModel'>;
+  bookings?: Array<{
+    id: string;
+    status?: string;
+    seats: number;
+    passenger: Pick<User, 'id' | 'name' | 'avatarUrl'>;
+  }>;
 };
 
 export const mapRegisteredRide = (ride: RideWithDriver) => {
@@ -85,7 +91,17 @@ export const mapRegisteredRide = (ride: RideWithDriver) => {
     features: ride.features ?? [],
     description: ride.description,
     status: ride.status,
-    createdAt: ride.createdAt.toISOString()
+    createdAt: ride.createdAt.toISOString(),
+    passengers: Array.isArray(ride.bookings)
+      ? ride.bookings.map((booking) => ({
+          id: booking.passenger.id,
+          bookingId: booking.id,
+          name: booking.passenger.name,
+          avatarUrl: booking.passenger.avatarUrl || undefined,
+          seats: booking.seats,
+          status: booking.status
+        }))
+      : []
   };
 };
 
