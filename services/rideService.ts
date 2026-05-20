@@ -74,7 +74,7 @@ export interface Ride {
   distance?: number | null;
   originCoords?: { lat: number; lng: number } | null;
   destinationCoords?: { lat: number; lng: number } | null;
-  passengers?: Array<{ id: string; name: string; avatarUrl?: string; seats: number }>;
+  passengers?: Array<{ id: string; bookingId?: string; name: string; avatarUrl?: string; seats: number; status?: string }>;
 }
 
 export interface RideSearchParams {
@@ -125,7 +125,6 @@ interface ApiResponse<T> {
 class RideService {
   private getToken(): string | null {
     try {
-      // Clé unifiée avec authService.ts
       return localStorage.getItem('sunu_yoon_access_token');
     } catch {
       return null;
@@ -154,7 +153,6 @@ class RideService {
       if (params.date) queryParams.append('date', params.date);
       if (params.seats) queryParams.append('seats', params.seats.toString());
 
-      // Timeout de 60s pour détecter le backend en veille (Render free tier)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
 
@@ -175,7 +173,7 @@ class RideService {
       return rides;
     } catch (error: any) {
       if (error?.name === 'AbortError') {
-        throw new Error('Failed to fetch: Le serveur met trop de temps à répondre (backend en veille)');
+        throw new Error('Failed to fetch: Le serveur met trop de temps a repondre (backend en veille)');
       }
       console.error('Search rides error:', error);
       throw error;
@@ -215,18 +213,18 @@ class RideService {
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.message || 'Erreur lors de la création du trajet');
+        throw new Error(errorBody.message || 'Erreur lors de la creation du trajet');
       }
 
     const payload: ApiResponse<{ ride: Ride }> = await response.json();
     searchCache.clear();
     if (!payload?.data?.ride) {
-      throw new Error('Réponse invalide du serveur.');
+      throw new Error('Reponse invalide du serveur.');
     }
     return payload.data.ride;
     } catch (error: any) {
       clearTimeout(timeoutId);
-      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps à répondre (en veille). Réessayez.');
+      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps a repondre (en veille). Reessayez.');
       throw error;
     }
   }
@@ -250,15 +248,14 @@ class RideService {
       }
 
     const payload: ApiResponse<{ ride: Ride }> = await response.json();
-    // Invalider le cache car un nouveau trajet vient d'être publié
     searchCache.clear();
     if (!payload?.data?.ride) {
-      throw new Error('Réponse invalide du serveur.');
+      throw new Error('Reponse invalide du serveur.');
     }
     return payload.data.ride;
     } catch (error: any) {
       clearTimeout(timeoutId);
-      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps à répondre (en veille). Réessayez.');
+      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps a repondre (en veille). Reessayez.');
       throw error;
     }
   }
@@ -313,14 +310,19 @@ class RideService {
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.message || 'Erreur lors de la réservation');
+        throw new Error(errorBody.message || 'Erreur lors de la reservation');
       }
 
+    const payload: ApiResponse<{ booking: { id: string } }> = await response.json();
     searchCache.clear();
-    return response.json();
+    const bookingId = payload?.data?.booking?.id;
+    if (!bookingId) {
+      throw new Error('Reponse invalide du serveur.');
+    }
+    return { bookingId };
     } catch (error: any) {
       clearTimeout(timeoutId);
-      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps à répondre. Réessayez.');
+      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps a repondre. Reessayez.');
       throw error;
     }
   }
