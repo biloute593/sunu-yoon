@@ -122,6 +122,8 @@ model Ride {
 
   @@index([driverId])
   @@index([originCity, destinationCity])
+  @@index([originCity])
+  @@index([destinationCity])
   @@index([departureTime])
   @@index([status])
 }
@@ -165,6 +167,8 @@ model GuestRide {
   updatedAt        DateTime        @updatedAt
 
   @@index([originCity, destinationCity])
+  @@index([originCity])
+  @@index([destinationCity])
   @@index([departureTime])
   @@index([status])
 }

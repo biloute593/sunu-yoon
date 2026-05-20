@@ -1,7 +1,7 @@
 import { Router, Response, NextFunction } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { AppError } from '../middleware/errorHandler';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest, authMiddleware } from '../middleware/auth';
 import {
   clearTrackingPoint,
   getTrackingPoint,
@@ -24,6 +24,7 @@ const ensureValid = (req: AuthRequest) => {
 
 router.post(
   '/:rideId',
+  authMiddleware,
   validateRideParam,
   body('lat').isFloat({ min: -90, max: 90 }).withMessage('Latitude invalide'),
   body('lng').isFloat({ min: -180, max: 180 }).withMessage('Longitude invalide'),
@@ -78,7 +79,7 @@ router.get('/:rideId/stream', validateRideParam, (req: AuthRequest, res: Respons
   }
 });
 
-router.delete('/:rideId', validateRideParam, (req: AuthRequest, res: Response, next: NextFunction) => {
+router.delete('/:rideId', authMiddleware, validateRideParam, (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     ensureValid(req);
     const { rideId } = req.params;

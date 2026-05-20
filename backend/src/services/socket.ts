@@ -110,18 +110,58 @@ export const setupSocketHandlers = (io: SocketServer) => {
     // ============ ENVOYER UN MESSAGE ============
     socket.on('send_message', async (data: {
       conversationId: string;
-      receiverId: string;
       content: string;
     }) => {
       try {
-        const { conversationId, receiverId, content } = data;
+        const { conversationId, content } = data;
 
         if (!content || content.trim().length === 0) {
           socket.emit('error', { message: 'Message vide' });
           return;
         }
 
-        // Créer le message
+        // 1. Récupérer la conversation pour trouver l'autre participant
+        const conversation = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          include: {
+            ride: {
+              include: {
+                bookings: {
+                  where: { status: 'CONFIRMED' },
+                  select: { passengerId: true }
+                }
+              }
+            }
+          }
+        });
+
+        if (!conversation) {
+          socket.emit('error', { message: 'Conversation non trouvée' });
+          return;
+        }
+
+        // 2. Déterminer le destinataire (receiverId)
+        // Soit l'expéditeur est le conducteur, le destinataire est le passager
+        // Soit l'expéditeur est le passager, le destinataire est le conducteur
+        let receiverId: string | undefined;
+        
+        if (conversation.ride.driverId === userId) {
+          // L'expéditeur est le conducteur. On cherche le passager.
+          // Note: S'il y a plusieurs passagers, la logique des conversations 
+          // devrait être 1-to-1 (un conducteur avec un passager spécifique).
+          // On prend le premier passager pour l'instant (à améliorer selon le modèle de données).
+          receiverId = conversation.ride.bookings[0]?.passengerId;
+        } else {
+          // L'expéditeur est un passager. Le destinataire est le conducteur.
+          receiverId = conversation.ride.driverId;
+        }
+
+        if (!receiverId) {
+          socket.emit('error', { message: 'Destinataire introuvable' });
+          return;
+        }
+
+        // 3. Créer le message
         const message = await prisma.message.create({
           data: {
             conversationId,
@@ -136,7 +176,7 @@ export const setupSocketHandlers = (io: SocketServer) => {
           }
         });
 
-        // Mettre à jour la date de la conversation
+        // 4. Mettre à jour la date de la conversation
         await prisma.conversation.update({
           where: { id: conversationId },
           data: { updatedAt: new Date() }

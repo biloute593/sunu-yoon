@@ -39,9 +39,13 @@ class TrackingService {
     this.lastPushByRide.set(rideId, now);
 
     try {
+      const token = localStorage.getItem('sunu_yoon_access_token');
       await fetch(`${API_URL}/tracking/${rideId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           lat: payload.coords.lat,
           lng: payload.coords.lng,
@@ -58,7 +62,11 @@ class TrackingService {
   async stopDriverTracking(rideId: string): Promise<void> {
     if (!rideId) return;
     try {
-      await fetch(`${API_URL}/tracking/${rideId}`, { method: 'DELETE' });
+      const token = localStorage.getItem('sunu_yoon_access_token');
+      await fetch(`${API_URL}/tracking/${rideId}`, {
+        method: 'DELETE',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
     } catch (error) {
       console.warn('Impossible d\'arrêter le tracking côté serveur', error);
     }
@@ -92,7 +100,9 @@ class TrackingService {
 
     this.unsubscribeFromRide(rideId);
 
-    const url = `${API_URL}/tracking/${rideId}/stream`;
+    const token = localStorage.getItem('sunu_yoon_access_token');
+    const tokenParam = token ? `?token=${token}` : '';
+    const url = `${API_URL}/tracking/${rideId}/stream${tokenParam}`;
     const source = new EventSource(url, { withCredentials: false });
 
     source.onmessage = (event) => {

@@ -20,15 +20,17 @@ export const authMiddleware = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
+    let token: string | undefined;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new AppError('Token d\'authentification manquant', 401);
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.query.token && typeof req.query.token === 'string') {
+      // Support for Server-Sent Events (SSE) which cannot send headers
+      token = req.query.token;
     }
 
-    const token = authHeader.split(' ')[1];
-
     if (!token) {
-      throw new AppError('Token d\'authentification invalide', 401);
+      throw new AppError('Token d\'authentification manquant', 401);
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
