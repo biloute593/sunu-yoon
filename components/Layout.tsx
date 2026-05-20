@@ -177,8 +177,8 @@ const Layout: React.FC<LayoutProps> = ({
         {children}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white mt-auto">
+      {/* Footer - hidden on mobile (bottom nav replaces it) */}
+      <footer className="hidden md:block bg-gray-900 text-white mt-auto">
         <div className="max-w-6xl mx-auto px-4 pt-12 pb-8 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
             <div className="col-span-2 md:col-span-1">

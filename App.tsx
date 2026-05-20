@@ -10,6 +10,7 @@ import LiveTrackingPanel from './components/LiveTrackingPanel';
 import RideRequest from './components/RideRequest';
 import DriverDashboard from './components/DriverDashboard';
 import { rideService, Ride as ApiRide, RideSearchParams } from './services/rideService';
+import { bookingService, Booking } from './services/bookingService';
 import { locationService } from './services/locationService';
 import { Coordinates, LocationState, DraftRide } from './types';
 
@@ -1472,16 +1473,19 @@ const ProfileView: React.FC<{
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'bookings' | 'announcements'>('bookings');
   const [myRides, setMyRides] = useState<Ride[]>([]);
-  const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [myBookings, setMyBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        const rides = await rideService.getMyRides();
+        const [rides, bookings] = await Promise.all([
+          rideService.getMyRides(),
+          bookingService.getMyBookings()
+        ]);
         setMyRides(rides.map(mapApiRideToRide));
-        // TODO: Charger les réservations quand l'API sera disponible
+        setMyBookings(bookings);
       } catch (error) {
         console.error('Erreur chargement données:', error);
       } finally {
@@ -1596,7 +1600,7 @@ const ProfileView: React.FC<{
               </div>
             ))
           )
-        ) : (
+        ) : myBookings.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-200">
             <Icons.Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900">Aucune réservation</h3>
@@ -1604,6 +1608,47 @@ const ProfileView: React.FC<{
             <button onClick={() => onNavigate('search')} className="text-emerald-600 font-bold hover:underline">
               Rechercher un trajet
             </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {myBookings.map(booking => {
+              const statusColors: Record<string, string> = {
+                CONFIRMED: 'bg-emerald-100 text-emerald-700',
+                PENDING: 'bg-yellow-100 text-yellow-700',
+                CANCELLED: 'bg-red-100 text-red-600',
+                COMPLETED: 'bg-gray-100 text-gray-600'
+              };
+              const statusLabels: Record<string, string> = {
+                CONFIRMED: 'Confirmée', PENDING: 'En attente',
+                CANCELLED: 'Annulée', COMPLETED: 'Terminée'
+              };
+              return (
+                <div key={booking.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="font-bold text-gray-900">
+                        {booking.ride.origin} → {booking.ride.destination}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-0.5">
+                        {new Date(booking.ride.departureTime).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusColors[booking.status] || 'bg-gray-100 text-gray-600'}`}>
+                      {statusLabels[booking.status] || booking.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Icons.Users size={14} />
+                      <span>{booking.seats} place{booking.seats > 1 ? 's' : ''}</span>
+                      <span className="text-gray-300">•</span>
+                      <span>Conducteur: {booking.ride.driver.name}</span>
+                    </div>
+                    <span className="font-bold text-emerald-600">{booking.totalPrice.toLocaleString('fr-FR')} XOF</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1624,6 +1669,7 @@ function AppContent() {
   const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [sortBy, setSortBy] = useState<'departure' | 'price' | 'rating'>('departure');
+  const [activeFeatureFilter, setActiveFeatureFilter] = useState<string | null>(null);
   
   // Modals
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -1635,9 +1681,14 @@ function AppContent() {
   const [showDriverMode, setShowDriverMode] = useState(false);
   const [isDriverAvailable, setIsDriverAvailable] = useState(false);
 
-  // Résultats triés
+  // Résultats triés et filtrés
   const sortedResults = useMemo(() => {
-    const results = [...searchResults];
+    let results = [...searchResults];
+    if (activeFeatureFilter === 'rating4plus') {
+      results = results.filter(r => (r.driver.rating || 0) >= 4);
+    } else if (activeFeatureFilter) {
+      results = results.filter(r => r.features.includes(activeFeatureFilter));
+    }
     switch (sortBy) {
       case 'price':
         return results.sort((a, b) => a.price - b.price);
@@ -1647,7 +1698,7 @@ function AppContent() {
       default:
         return results.sort((a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime());
     }
-  }, [searchResults, sortBy]);
+  }, [searchResults, sortBy, activeFeatureFilter]);
 
   // Trajets récents pour l'accueil
   const [recentRides, setRecentRides] = useState<Ride[]>([]);
@@ -1819,9 +1870,26 @@ function AppContent() {
                <div className="absolute bottom-0 left-0 w-48 h-48 bg-yellow-400/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
                
                <div className="max-w-6xl mx-auto relative z-10 text-center">
-                 <h1 className="text-4xl md:text-6xl font-extrabold mb-6 tracking-tight leading-tight">
+                 <h1 className="text-4xl md:text-6xl font-extrabold mb-4 tracking-tight leading-tight">
                    Covoiturage Sénégal
                  </h1>
+                 <p className="text-lg md:text-xl text-white/85 max-w-xl mx-auto mb-6">
+                   Partagez vos trajets, économisez ensemble. Simple, rapide, de confiance.
+                 </p>
+                 <div className="flex flex-wrap justify-center gap-4 text-sm">
+                   <div className="flex items-center gap-1.5 bg-white/15 backdrop-blur-sm px-4 py-2 rounded-full">
+                     <Icons.Shield size={15} />
+                     <span>Paiement sécurisé</span>
+                   </div>
+                   <div className="flex items-center gap-1.5 bg-white/15 backdrop-blur-sm px-4 py-2 rounded-full">
+                     <Icons.CheckCircle size={15} />
+                     <span>Conducteurs vérifiés</span>
+                   </div>
+                   <div className="flex items-center gap-1.5 bg-white/15 backdrop-blur-sm px-4 py-2 rounded-full">
+                     <Icons.MapPin size={15} />
+                     <span>Partout au Sénégal</span>
+                   </div>
+                 </div>
                </div>
             </div>
             
@@ -1836,20 +1904,27 @@ function AppContent() {
 
                {/* Actions rapides */}
                <div className="max-w-4xl mx-auto mt-12 mb-8">
-                 <div className="grid grid-cols-2 gap-4">
+                 <div className="grid grid-cols-3 gap-3">
                    <button
                      onClick={() => setCurrentView('publish')}
-                     className="px-6 py-4 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex flex-col items-center justify-center gap-2"
+                     className="px-4 py-4 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex flex-col items-center justify-center gap-2"
                    >
-                     <Icons.PlusCircle size={28} />
-                     <span>Proposer un trajet</span>
+                     <Icons.PlusCircle size={26} />
+                     <span className="text-sm text-center">Proposer un trajet</span>
                    </button>
                    <button
-                     onClick={() => document.getElementById('search-origin')?.focus()}
-                     className="px-6 py-4 rounded-2xl bg-white border-2 border-emerald-600 text-emerald-600 font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex flex-col items-center justify-center gap-2"
+                     onClick={() => handleSearch({ origin: '', destination: '', date: new Date().toISOString().split('T')[0], passengers: 1 })}
+                     className="px-4 py-4 rounded-2xl bg-white border-2 border-emerald-600 text-emerald-600 font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex flex-col items-center justify-center gap-2"
                    >
-                     <Icons.Search size={28} />
-                     <span>Trouver un trajet</span>
+                     <Icons.Search size={26} />
+                     <span className="text-sm text-center">Voir les trajets</span>
+                   </button>
+                   <button
+                     onClick={() => setShowRequestRide(true)}
+                     className="px-4 py-4 rounded-2xl bg-white border-2 border-amber-500 text-amber-600 font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex flex-col items-center justify-center gap-2"
+                   >
+                     <Icons.MapPin size={26} />
+                     <span className="text-sm text-center">Course immédiate</span>
                    </button>
                  </div>
                </div>
@@ -1936,20 +2011,21 @@ function AppContent() {
               </div>
               
               {/* Quick filters */}
-              {sortedResults.length > 0 && (
+              {searchResults.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-6">
-                  <button className="px-3 py-1.5 text-sm font-medium bg-emerald-100 text-emerald-700 rounded-full hover:bg-emerald-200 transition-colors">
-                    Tous
-                  </button>
-                  <button className="px-3 py-1.5 text-sm font-medium bg-white text-gray-600 border border-gray-200 rounded-full hover:border-emerald-300 hover:text-emerald-600 transition-colors">
-                    ❄️ Climatisation
-                  </button>
-                  <button className="px-3 py-1.5 text-sm font-medium bg-white text-gray-600 border border-gray-200 rounded-full hover:border-emerald-300 hover:text-emerald-600 transition-colors">
-                    🧳 Bagages
-                  </button>
-                  <button className="px-3 py-1.5 text-sm font-medium bg-white text-gray-600 border border-gray-200 rounded-full hover:border-emerald-300 hover:text-emerald-600 transition-colors">
-                    ⭐ 4+ étoiles
-                  </button>
+                  {[{id: null, label: 'Tous'}, {id: 'Climatisation', label: '❄️ Climatisation'}, {id: 'Bagages acceptés', label: '🧳 Bagages'}, {id: 'rating4plus', label: '⭐ 4+ étoiles'}].map(f => (
+                    <button
+                      key={String(f.id)}
+                      onClick={() => setActiveFeatureFilter(prev => prev === f.id ? null : f.id)}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                        activeFeatureFilter === f.id
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-white text-gray-600 border border-gray-200 hover:border-emerald-300 hover:text-emerald-600'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
                 </div>
               )}
               

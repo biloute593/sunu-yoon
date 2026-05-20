@@ -28,7 +28,8 @@ import {
   Pause,
   Play,
   StopCircle,
-  Phone
+  Phone,
+  Home
 } from 'lucide-react';
 
 export const Icons = {
@@ -60,5 +61,6 @@ export const Icons = {
   Pause,
   Play,
   StopCircle,
-  Phone
+  Phone,
+  Home
 };
