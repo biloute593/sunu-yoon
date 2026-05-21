@@ -9,6 +9,7 @@ import { Icons } from './components/Icons';
 import LiveTrackingPanel from './components/LiveTrackingPanel';
 import RideRequest from './components/RideRequest';
 import DriverDashboard from './components/DriverDashboard';
+import { messageService, Conversation } from './services/messageService';
 import { rideService, Ride as ApiRide, RideSearchParams } from './services/rideService';
 import { bookingService, Booking } from './services/bookingService';
 import { locationService } from './services/locationService';
@@ -58,6 +59,13 @@ interface SearchParams {
   date: string;
   passengers: number;
   userLocation?: Coordinates;
+}
+
+interface ChatTarget {
+  recipientId: string;
+  recipientName: string;
+  recipientAvatar?: string;
+  rideId?: string;
 }
 
 // Convertir les données de l'API vers le format frontend
@@ -1656,6 +1664,106 @@ const ProfileView: React.FC<{
   );
 };
 
+const ChatSpace: React.FC<{
+  userId: string;
+  onOpenConversation: (target: ChatTarget) => void;
+}> = ({ userId, onOpenConversation }) => {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadConversations = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const items = await messageService.getConversations();
+      setConversations(items);
+    } catch (error) {
+      console.error('Erreur chargement conversations:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConversations();
+  }, [loadConversations]);
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-8 animate-fade-in">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Espace Chat</h1>
+        <button
+          onClick={loadConversations}
+          className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
+        >
+          Actualiser
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+          <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        </div>
+      ) : conversations.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center">
+          <Icons.MessageCircle className="mx-auto text-gray-300 mb-3" size={32} />
+          <h3 className="text-lg font-semibold text-gray-900">Aucune conversation</h3>
+          <p className="text-gray-500 mt-1">Vos discussions avec les chauffeurs apparaîtront ici.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          {conversations.map((conversation) => {
+            const participant = conversation.participants.find((p) => p.id !== userId) || conversation.participants[0];
+            if (!participant) {
+              return null;
+            }
+
+            return (
+              <button
+                key={conversation.id}
+                onClick={() =>
+                  onOpenConversation({
+                    recipientId: participant.id,
+                    recipientName: participant.name,
+                    recipientAvatar: participant.avatarUrl,
+                    rideId: conversation.ride?.id
+                  })
+                }
+                className="w-full text-left px-4 py-4 border-b last:border-b-0 border-gray-100 hover:bg-emerald-50/40 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full overflow-hidden bg-emerald-100 flex items-center justify-center">
+                    {participant.avatarUrl ? (
+                      <img src={participant.avatarUrl} alt={participant.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Icons.User size={18} className="text-emerald-700" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-gray-900 truncate">{participant.name}</p>
+                      <p className="text-xs text-gray-400">
+                        {new Date(conversation.updatedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+                      </p>
+                    </div>
+                    <p className="text-sm text-gray-500 truncate">
+                      {conversation.lastMessage?.content || 'Touchez pour démarrer la conversation'}
+                    </p>
+                  </div>
+                  {conversation.unreadCount > 0 && (
+                    <span className="min-w-6 h-6 px-1 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center">
+                      {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // --- MAIN APP COMPONENT ---
 
 function AppContent() {
@@ -1675,6 +1783,7 @@ function AppContent() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showChatWindow, setShowChatWindow] = useState(false);
+  const [chatTarget, setChatTarget] = useState<ChatTarget | null>(null);
   
   // Transport à la demande (mode Uber)
   const [showRequestRide, setShowRequestRide] = useState(false);
@@ -2106,6 +2215,12 @@ function AppContent() {
               if (!isAuthenticated) {
                 setShowAuthModal(true);
               } else {
+                setChatTarget({
+                  recipientId: selectedRide.driver.id,
+                  recipientName: selectedRide.driver.name,
+                  recipientAvatar: selectedRide.driver.avatarUrl,
+                  rideId: selectedRide.id
+                });
                 setShowChatWindow(true);
               }
             }}
@@ -2138,6 +2253,22 @@ function AppContent() {
         }
         return <ProfileView onNavigate={setCurrentView} refreshKey={profileRefreshKey} />;
 
+      case 'chat-space':
+        if (!isAuthenticated || !user) {
+          setShowAuthModal(true);
+          setCurrentView('home');
+          return null;
+        }
+        return (
+          <ChatSpace
+            userId={user.id}
+            onOpenConversation={(target) => {
+              setChatTarget(target);
+              setShowChatWindow(true);
+            }}
+          />
+        );
+
       default:
         return null;
     }
@@ -2160,6 +2291,10 @@ function AppContent() {
       onNavigate={(view) => {
         if (view === 'driver-mode') {
           setShowDriverMode(true);
+        } else if (view === 'ride-request') {
+          setShowRequestRide(true);
+        } else if (view === 'chat-space' && !isAuthenticated) {
+          setShowAuthModal(true);
         } else {
           setCurrentView(view);
         }
@@ -2247,30 +2382,30 @@ function AppContent() {
       )}
       
       {selectedRide && !selectedRide.isGuest && (
-        <>
-          <BookingModal 
-            isOpen={showBookingModal}
-            onClose={() => setShowBookingModal(false)}
-            rideId={selectedRide.id}
-            price={selectedRide.price}
-            currency={selectedRide.currency}
-            seats={selectedRide.seatsAvailable}
-            origin={selectedRide.origin}
-            destination={selectedRide.destination}
-            departureTime={selectedRide.departureTime}
-            driverName={selectedRide.driver.name}
-            onSuccess={handleBookingSuccess}
-          />
-          
-          <ChatWindow
-            isOpen={showChatWindow}
-            onClose={() => setShowChatWindow(false)}
-            recipientId={selectedRide.driver.id}
-            recipientName={selectedRide.driver.name}
-            recipientAvatar={selectedRide.driver.avatarUrl}
-            rideId={selectedRide.id}
-          />
-        </>
+        <BookingModal 
+          isOpen={showBookingModal}
+          onClose={() => setShowBookingModal(false)}
+          rideId={selectedRide.id}
+          price={selectedRide.price}
+          currency={selectedRide.currency}
+          seats={selectedRide.seatsAvailable}
+          origin={selectedRide.origin}
+          destination={selectedRide.destination}
+          departureTime={selectedRide.departureTime}
+          driverName={selectedRide.driver.name}
+          onSuccess={handleBookingSuccess}
+        />
+      )}
+
+      {chatTarget && (
+        <ChatWindow
+          isOpen={showChatWindow}
+          onClose={() => setShowChatWindow(false)}
+          recipientId={chatTarget.recipientId}
+          recipientName={chatTarget.recipientName}
+          recipientAvatar={chatTarget.recipientAvatar}
+          rideId={chatTarget.rideId}
+        />
       )}
     </Layout>
   );

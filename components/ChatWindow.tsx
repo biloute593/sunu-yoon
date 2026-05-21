@@ -77,7 +77,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         setMessages(prev => [...prev, message]);
         // Marquer comme lu si c'est un message reçu
         if (message.senderId !== user?.id) {
-          messageService.markAsRead(conversationId, message.id);
+          messageService.markAsRead(conversationId);
         }
       }
     };
@@ -121,9 +121,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
     try {
       // Envoyer via WebSocket (temps réel)
-      messageService.sendMessage(conversationId, messageText);
-      
-      // Le message sera ajouté via l'événement WebSocket
+      const sentViaSocket = messageService.sendMessage(conversationId, messageText);
+
+      // Fallback direct si la socket n'est pas connectée
+      if (!sentViaSocket) {
+        const sent = await messageService.sendMessageREST(conversationId, messageText);
+        setMessages(prev => [...prev, sent]);
+      }
     } catch (error) {
       console.error('Erreur envoi message:', error);
       // Fallback: envoyer via API REST

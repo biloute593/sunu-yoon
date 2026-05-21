@@ -38,6 +38,45 @@ export interface AuthResponse {
 }
 
 class AuthService {
+  private async fetchJsonWithFallback(
+    requests: Array<() => Promise<Response>>
+  ): Promise<any> {
+    let lastError: any = null;
+
+    for (const makeRequest of requests) {
+      try {
+        const response = await makeRequest();
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          lastError = { response: { data } };
+          continue;
+        }
+
+        return data;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError || new Error('Request failed');
+  }
+
+  private mapUser(user: any): AuthUser {
+    return {
+      id: user.id,
+      firstName: user.firstName || user.name?.split(' ')[0] || '',
+      lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
+      phone: user.phone,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      rating: user.rating,
+      reviewCount: user.reviewCount,
+      isVerified: user.isVerified,
+      createdAt: user.createdAt || new Date().toISOString()
+    };
+  }
+
   // Récupérer le token d'accès
   getToken(): string | null {
     return localStorage.getItem(TOKEN_KEY);
@@ -113,19 +152,7 @@ class AuthService {
 
       if (accessToken && user) {
         this.setTokens(accessToken, refreshToken);
-        // Transformer le user pour compléter firstName/lastName si manquant
-        const authUser: AuthUser = {
-          id: user.id,
-          firstName: user.firstName || user.name?.split(' ')[0] || '',
-          lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
-          phone: user.phone,
-          email: user.email,
-          avatarUrl: user.avatarUrl,
-          rating: user.rating,
-          reviewCount: user.reviewCount,
-          isVerified: user.isVerified,
-          createdAt: user.createdAt || new Date().toISOString()
-        };
+        const authUser = this.mapUser(user);
         this.setCurrentUser(authUser);
       }
 
@@ -145,30 +172,53 @@ class AuthService {
   // Inscription
   async register(data: RegisterData): Promise<AuthResponse> {
     try {
-      // Séparer le nom en prénom et nom
       const nameParts = data.name.trim().split(' ');
-      const firstName = nameParts[0];
+      const firstName = nameParts[0] || data.name;
       const lastName = nameParts.slice(1).join(' ') || undefined;
 
-      const response = await fetch(`${API_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName,
-          lastName,
-          phone: data.phone,
-          email: data.email,
-          password: data.password
+      const raw = await this.fetchJsonWithFallback([
+        () => fetch(`${API_URL}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: data.name,
+            firstName,
+            lastName,
+            phone: data.phone,
+            email: data.email,
+            password: data.password
+          })
+        }),
+        () => fetch(`${API_URL}/auth/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: data.name,
+            firstName,
+            lastName,
+            phone: data.phone,
+            email: data.email,
+            password: data.password
+          })
         })
-      });
+      ]);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw { response: { data: error } };
+      const accessToken = raw?.data?.tokens?.accessToken || raw?.data?.token || raw?.token;
+      const refreshToken = raw?.data?.tokens?.refreshToken || raw?.data?.refreshToken || raw?.refreshToken;
+      const user = raw?.data?.user || raw?.user;
+
+      if (accessToken && user) {
+        this.setTokens(accessToken, refreshToken);
+        this.setCurrentUser(this.mapUser(user));
       }
 
-      const result: AuthResponse = await response.json();
-      return result;
+      return {
+        user,
+        token: accessToken,
+        refreshToken,
+        requiresVerification: raw?.data?.verificationRequired || raw?.requiresVerification || false,
+        message: raw?.message
+      };
     } catch (error) {
       console.error('Register error:', error);
       throw error;
@@ -176,47 +226,26 @@ class AuthService {
   }
 
   // Vérifier le code SMS
-  async verifyCode(phone: string, code: string): Promise<AuthResponse> {
+  async verifyCode(_phone: string, code: string): Promise<AuthResponse> {
     try {
-      const response = await fetch(`${API_URL}/auth/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code })
-      });
+      const data = await this.fetchJsonWithFallback([
+        () => fetch(`${API_URL}/auth/verify`, {
+          method: 'POST',
+          headers: this.getAuthHeaders(),
+          body: JSON.stringify({ code, type: 'PHONE_VERIFICATION' })
+        }),
+        () => fetch(`${API_URL}/auth/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, phone: _phone })
+        })
+      ]);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw { response: { data: error } };
-      }
-
-      const data = await response.json();
-
-      const accessToken = data?.data?.tokens?.accessToken || data?.data?.token || data?.token;
-      const refreshToken = data?.data?.tokens?.refreshToken || data?.data?.refreshToken || data?.refreshToken;
-      const user = data?.data?.user || data?.user;
-
-      if (accessToken && user) {
-        this.setTokens(accessToken, refreshToken);
-        const authUser: AuthUser = {
-          id: user.id,
-          firstName: user.firstName || user.name?.split(' ')[0] || '',
-          lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
-          phone: user.phone,
-          email: user.email,
-          avatarUrl: user.avatarUrl,
-          rating: user.rating,
-          reviewCount: user.reviewCount,
-          isVerified: user.isVerified,
-          createdAt: user.createdAt || new Date().toISOString()
-        };
-        this.setCurrentUser(authUser);
-      }
+      const freshUser = await this.getProfile();
 
       return {
-        user: user,
-        token: accessToken,
-        refreshToken,
-        requiresVerification: data?.data?.verificationRequired || false,
+        user: freshUser,
+        requiresVerification: false,
         message: data?.message
       };
     } catch (error) {
@@ -226,18 +255,20 @@ class AuthService {
   }
 
   // Renvoyer le code SMS
-  async resendCode(phone: string): Promise<{ success: boolean }> {
+  async resendCode(_phone: string): Promise<{ success: boolean }> {
     try {
-      const response = await fetch(`${API_URL}/auth/resend-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw { response: { data: error } };
-      }
+      await this.fetchJsonWithFallback([
+        () => fetch(`${API_URL}/auth/resend-code`, {
+          method: 'POST',
+          headers: this.getAuthHeaders(),
+          body: JSON.stringify({ type: 'PHONE_VERIFICATION' })
+        }),
+        () => fetch(`${API_URL}/auth/resend-code`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: _phone })
+        })
+      ]);
 
       return { success: true };
     } catch (error) {
@@ -252,17 +283,23 @@ class AuthService {
       const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
       if (!refreshToken) return false;
 
-      const response = await fetch(`${API_URL}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken })
-      });
+      const data = await this.fetchJsonWithFallback([
+        () => fetch(`${API_URL}/auth/refresh-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken })
+        }),
+        () => fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken })
+        })
+      ]);
 
-      if (!response.ok) return false;
-
-      const data = await response.json();
-      if (data.token) {
-        this.setTokens(data.token, data.refreshToken);
+      const accessToken = data?.data?.tokens?.accessToken || data?.data?.token || data?.token;
+      const newRefreshToken = data?.data?.tokens?.refreshToken || data?.data?.refreshToken || data?.refreshToken;
+      if (accessToken) {
+        this.setTokens(accessToken, newRefreshToken);
         return true;
       }
 
@@ -275,16 +312,23 @@ class AuthService {
 
   // Récupérer le profil utilisateur
   async getProfile(): Promise<AuthUser> {
-    const response = await fetch(`${API_URL}/auth/me`, {
-      method: 'GET',
-      headers: this.getAuthHeaders()
-    });
+    const data = await this.fetchJsonWithFallback([
+      () => fetch(`${API_URL}/users/me`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      }),
+      () => fetch(`${API_URL}/auth/me`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      })
+    ]);
 
-    if (!response.ok) {
-      throw new Error('Failed to get profile');
+    const rawUser = data?.data?.user || data?.user;
+    if (!rawUser) {
+      throw new Error('Failed to parse profile');
     }
 
-    const user: AuthUser = await response.json();
+    const user = this.mapUser(rawUser);
     this.setCurrentUser(user);
     return user;
   }

@@ -40,6 +40,22 @@ export interface Conversation {
 type MessageCallback = (message: Message) => void;
 type TypingCallback = (data: { conversationId: string; userId: string; isTyping: boolean }) => void;
 
+const localConversations = new Map<string, Conversation>();
+const localMessages = new Map<string, Message[]>();
+
+const getCurrentUserId = (): string => {
+  try {
+    const userRaw = localStorage.getItem('sunu_yoon_user');
+    if (!userRaw) {
+      return 'me';
+    }
+    const user = JSON.parse(userRaw);
+    return user?.id || 'me';
+  } catch {
+    return 'me';
+  }
+};
+
 // Singleton pour la connexion WebSocket
 class SocketService {
   private socket: Socket | null = null;
@@ -102,8 +118,12 @@ class SocketService {
   }
 
   // Envoyer un message
-  sendMessage(conversationId: string, content: string): void {
-    this.socket?.emit('send_message', { conversationId, content });
+  sendMessage(conversationId: string, content: string): boolean {
+    if (!this.socket?.connected) {
+      return false;
+    }
+    this.socket.emit('send_message', { conversationId, content });
+    return true;
   }
 
   // Indiquer qu'on écrit
@@ -116,8 +136,8 @@ class SocketService {
   }
 
   // Marquer les messages comme lus
-  markAsRead(conversationId: string, messageId: string): void {
-    this.socket?.emit('mark_as_read', { conversationId, messageId });
+  markAsRead(conversationId: string): void {
+    this.socket?.emit('mark_as_read', conversationId);
   }
 
   // Écouter les nouveaux messages
@@ -151,7 +171,7 @@ export const messageService = {
   leaveConversation: (id: string) => socketService.leaveConversation(id),
   sendMessage: (conversationId: string, content: string) => socketService.sendMessage(conversationId, content),
   sendTypingIndicator: (conversationId: string, isTyping: boolean) => socketService.sendTypingIndicator(conversationId, isTyping),
-  markAsRead: (conversationId: string, messageId: string) => socketService.markAsRead(conversationId, messageId),
+  markAsRead: (conversationId: string) => socketService.markAsRead(conversationId),
   onNewMessage: (callback: MessageCallback) => socketService.onNewMessage(callback),
   offNewMessage: (callback: MessageCallback) => socketService.offNewMessage(callback),
   onTyping: (callback: TypingCallback) => socketService.onTyping(callback),
@@ -159,40 +179,116 @@ export const messageService = {
 
   // Créer une conversation
   async createConversation(recipientId: string, rideId: string): Promise<Conversation> {
-    const response = await ApiClient.post<{ conversation: Conversation }>(
-      '/messages/conversations',
-      { recipientId, rideId }
-    );
-    if (response.success && response.data?.conversation) {
-      return response.data.conversation;
+    try {
+      const response = await ApiClient.post<{ conversation: Conversation }>(
+        '/messages/conversations',
+        { recipientId, rideId }
+      );
+      if (response.success && response.data?.conversation) {
+        return response.data.conversation;
+      }
+    } catch {
+      // Fallback local
     }
-    throw new Error('Failed to create conversation');
+
+    const localId = `local_${rideId || 'ride'}_${recipientId}`;
+    const currentUserId = getCurrentUserId();
+    const existing = localConversations.get(localId);
+    if (existing) {
+      return existing;
+    }
+
+    const created: Conversation = {
+      id: localId,
+      ride: rideId
+        ? {
+            id: rideId,
+            origin: 'Trajet',
+            destination: 'Trajet',
+            departureTime: new Date().toISOString()
+          }
+        : undefined,
+      participants: [
+        { id: recipientId, name: 'Chauffeur' },
+        { id: currentUserId, name: 'Vous' }
+      ],
+      unreadCount: 0,
+      updatedAt: new Date().toISOString()
+    };
+
+    localConversations.set(localId, created);
+    if (!localMessages.has(localId)) {
+      localMessages.set(localId, []);
+    }
+
+    return created;
   },
 
   // Lister mes conversations
   async getConversations(): Promise<Conversation[]> {
-    const response = await ApiClient.get<{ conversations: Conversation[] }>('/messages/conversations');
-    return response.success ? response.data?.conversations || [] : [];
+    try {
+      const response = await ApiClient.get<{ conversations: Conversation[] }>('/messages/conversations');
+      return response.success ? response.data?.conversations || [] : [];
+    } catch {
+      return Array.from(localConversations.values()).sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+    }
   },
 
   // Obtenir les messages d'une conversation
   async getMessages(conversationId: string, before?: string): Promise<Message[]> {
-    const params = before ? `?before=${before}` : '';
-    const response = await ApiClient.get<{ messages: Message[] }>(
-      `/messages/conversations/${conversationId}/messages${params}`
-    );
-    return response.success ? response.data?.messages || [] : [];
+    try {
+      const params = before ? `?before=${before}` : '';
+      const response = await ApiClient.get<{ messages: Message[] }>(
+        `/messages/conversations/${conversationId}/messages${params}`
+      );
+      return response.success ? response.data?.messages || [] : [];
+    } catch {
+      return localMessages.get(conversationId) || [];
+    }
   },
 
   // Envoyer un message via REST (fallback)
   async sendMessageREST(conversationId: string, content: string): Promise<Message> {
-    const response = await ApiClient.post<{ message: Message }>(
-      `/messages/conversations/${conversationId}/messages`,
-      { content }
-    );
-    if (response.success && response.data?.message) {
-      return response.data.message;
+    try {
+      const response = await ApiClient.post<{ message: Message }>(
+        `/messages/conversations/${conversationId}/messages`,
+        { content }
+      );
+      if (response.success && response.data?.message) {
+        return response.data.message;
+      }
+      throw new Error('Failed to send message');
+    } catch {
+      const message: Message = {
+        id: `local_msg_${Date.now()}`,
+        conversationId,
+        senderId: getCurrentUserId(),
+        receiverId: 'recipient',
+        content,
+        isRead: true,
+        createdAt: new Date().toISOString()
+      };
+
+      const existing = localMessages.get(conversationId) || [];
+      localMessages.set(conversationId, [...existing, message]);
+
+      const conv = localConversations.get(conversationId);
+      if (conv) {
+        localConversations.set(conversationId, {
+          ...conv,
+          updatedAt: message.createdAt,
+          lastMessage: {
+            content: message.content,
+            senderName: 'Vous',
+            createdAt: message.createdAt,
+            isFromMe: true
+          }
+        });
+      }
+
+      return message;
     }
-    throw new Error('Failed to send message');
   }
 };

@@ -54,6 +54,12 @@ const Layout: React.FC<LayoutProps> = ({
                 <Icons.Search size={18} />
                 Rechercher
               </button>
+              {user && (
+                <button onClick={() => onNavigate('chat-space')} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all ${currentView === 'chat-space' ? 'text-emerald-600 bg-emerald-50' : 'text-gray-600 hover:text-emerald-600 hover:bg-gray-50'}`}>
+                  <Icons.MessageCircle size={18} />
+                  Espace Chat
+                </button>
+              )}
               <button onClick={() => onNavigate('ride-request')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all bg-rose-50 text-rose-700 hover:bg-rose-100">
                 🚖 Course immediate
               </button>
@@ -87,6 +93,10 @@ const Layout: React.FC<LayoutProps> = ({
                         <button onClick={() => { onNavigate('profile'); setShowDropdown(false); }} className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-emerald-600">
                           <Icons.Car size={16} />
                           Mes trajets
+                        </button>
+                        <button onClick={() => { onNavigate('chat-space'); setShowDropdown(false); }} className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-emerald-600">
+                          <Icons.MessageCircle size={16} />
+                          Espace Chat
                         </button>
                         <div className="border-t border-gray-100 mt-1 pt-1">
                           <button onClick={handleLogout} className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50">
@@ -150,6 +160,10 @@ const Layout: React.FC<LayoutProps> = ({
               </button>
               {user ? (
                 <>
+                  <button onClick={() => { onNavigate('chat-space'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-4 py-3 rounded-lg text-base font-medium text-gray-700 hover:text-emerald-600 hover:bg-emerald-50">
+                    <Icons.MessageCircle size={20} />
+                    Espace Chat
+                  </button>
                   <button onClick={() => { onNavigate('profile'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-4 py-3 rounded-lg text-base font-medium text-gray-700 hover:text-emerald-600 hover:bg-emerald-50">
                     <Icons.User size={20} />
                     Mon profil
@@ -202,6 +216,7 @@ const Layout: React.FC<LayoutProps> = ({
                 <li><button onClick={() => onNavigate('home')} className="hover:text-emerald-400 transition-colors text-left">Accueil</button></li>
                 <li><button onClick={() => onNavigate('search')} className="hover:text-emerald-400 transition-colors text-left">Rechercher un trajet</button></li>
                 <li><button onClick={() => onNavigate('publish')} className="hover:text-emerald-400 transition-colors text-left">Proposer un trajet</button></li>
+                <li><button onClick={() => onNavigate('chat-space')} className="hover:text-emerald-400 transition-colors text-left">Espace Chat</button></li>
                 <li><button onClick={() => onNavigate('ride-request')} className="hover:text-emerald-400 transition-colors text-left">Course immediate</button></li>
                 <li><button onClick={() => onNavigate('driver-mode')} className="hover:text-emerald-400 transition-colors text-left">Mode Chauffeur</button></li>
               </ul>

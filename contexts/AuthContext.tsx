@@ -80,8 +80,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return { success: true, requiresVerification: true };
       }
       
-      if (response.user) {
-        setUser(response.user as any);
+      const normalizedUser = authService.getCurrentUser();
+      if (normalizedUser) {
+        setUser(normalizedUser);
+      } else if (response.user) {
+        const freshUser = await authService.getProfile();
+        setUser(freshUser);
       }
       
       return { success: true };
@@ -102,9 +106,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       const response = await authService.register(data);
       
-      // Stocker le user si renvoyé (même sans vérification complète)
-      if (response.user) {
-        setUser(response.user as any);
+      const normalizedUser = authService.getCurrentUser();
+      if (normalizedUser) {
+        setUser(normalizedUser);
+      } else if (response.user) {
+        const freshUser = await authService.getProfile();
+        setUser(freshUser);
       }
       
       return { success: true, requiresVerification: true };
@@ -125,8 +132,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       const response = await authService.verifyCode(phone, code);
       
-      if (response.user) {
-        setUser(response.user);
+      const normalizedUser = authService.getCurrentUser();
+      if (normalizedUser) {
+        setUser(normalizedUser);
+      } else if (response.user) {
+        const freshUser = await authService.getProfile();
+        setUser(freshUser);
       }
       
       return { success: true };

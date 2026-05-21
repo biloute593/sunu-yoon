@@ -31,15 +31,37 @@ const app = express();
 const httpServer = createServer(app);
 
 // Origines autorisées pour CORS
-const allowedOrigins = [
+const configuredOrigins = [
   process.env.FRONTEND_URL,
+  ...(process.env.CORS_ORIGINS || '').split(',').map((value) => value.trim())
+].filter(Boolean) as string[];
+
+const allowedOrigins = Array.from(new Set([
+  ...configuredOrigins,
   'https://sunuyoon.net',
   'https://www.sunuyoon.net',
+  'https://sunu-yoon.onrender.com',
+  'https://www.sunu-yoon.onrender.com',
   'https://sunu-yoon-app.web.app',
   'https://sunu-yoon-app.firebaseapp.com',
   'http://localhost:5173',
   'http://localhost:3000'
-].filter(Boolean) as string[];
+]));
+
+const corsOrigin: cors.CorsOptions['origin'] = (origin, callback) => {
+  // Autoriser les clients sans origin (curl, health checks, apps serveur).
+  if (!origin) {
+    callback(null, true);
+    return;
+  }
+
+  if (allowedOrigins.includes(origin)) {
+    callback(null, true);
+    return;
+  }
+
+  callback(new Error(`Origin not allowed by CORS: ${origin}`));
+};
 
 const io = new SocketServer(httpServer, {
   cors: {
@@ -55,7 +77,7 @@ export const prisma = new PrismaClient();
 // Middleware de base
 app.use(helmet());
 app.use(cors({
-  origin: allowedOrigins,
+  origin: corsOrigin,
   credentials: true
 }));
 app.use(express.json());
