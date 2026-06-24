@@ -14,17 +14,18 @@
     "docker:logs": "docker-compose logs -f"
   },
   "dependencies": {
-    "react": "^19.2.0",
-    "lucide-react": "^0.555.0",
-    "react-dom": "^19.2.0",
     "@google/genai": "^1.30.0",
+    "@supabase/supabase-js": "^2.106.1",
+    "lucide-react": "^0.555.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "socket.io-client": "^4.7.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^8.2.2",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0",
-    "concurrently": "^8.2.2"
+    "vite": "^6.2.0"
   }
 }

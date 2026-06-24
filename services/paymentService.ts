@@ -1,4 +1,5 @@
-import { ApiClient } from './apiClient';
+import { supabase, supabaseEnabled } from './supabase';
+import { notificationService } from './notificationService';
 
 export type PaymentMethod = 'WAVE' | 'ORANGE_MONEY' | 'CASH';
 
@@ -25,32 +26,77 @@ interface PaymentStatus {
   paidAt?: string;
 }
 
-// Service de gestion des paiements
 export const paymentService = {
-  // Initier un paiement
   async initiatePayment(data: PaymentInitData): Promise<PaymentInitResponse> {
-    const response = await ApiClient.post<PaymentInitResponse>('/payments/initiate', {
-      bookingId: data.bookingId,
-      method: data.method,
-      amount: data.amount,
-      currency: data.currency || 'XOF'
-    });
+    const currency = data.currency || 'XOF';
 
-    if (response.success && response.data) {
-      return response.data;
+    if (data.method === 'CASH') {
+      if (supabaseEnabled && supabase) {
+        await supabase
+          .from('bookings')
+          .update({ payment_method: 'CASH' })
+          .eq('id', data.bookingId);
+      }
+      notificationService.push(
+        'payment',
+        'Paiement en espèces',
+        `Payez ${data.amount.toLocaleString()} ${currency} directement au conducteur lors du voyage.`
+      );
+      return { paymentId: data.bookingId, method: 'CASH', amount: data.amount, status: 'CONFIRMED' };
     }
 
-    throw new Error(response.error?.message || 'Erreur lors du paiement');
+    if (data.method === 'WAVE') {
+      const waveUrl = `https://pay.wave.com/m/sunu_yoon?amount=${data.amount}&currency=${currency}&ref=${data.bookingId}`;
+      notificationService.push(
+        'payment',
+        'Paiement Wave',
+        `Vous allez être redirigé vers Wave pour payer ${data.amount.toLocaleString()} ${currency}.`
+      );
+      return {
+        paymentId: data.bookingId,
+        method: 'WAVE',
+        amount: data.amount,
+        checkoutUrl: waveUrl,
+        redirectUrl: waveUrl,
+        status: 'PENDING',
+      };
+    }
+
+    if (data.method === 'ORANGE_MONEY') {
+      notificationService.push(
+        'payment',
+        'Paiement Orange Money',
+        `Composez #144# sur votre téléphone Orange pour payer ${data.amount.toLocaleString()} ${currency}. Réf: ${data.bookingId.slice(0, 8)}`
+      );
+      return {
+        paymentId: data.bookingId,
+        method: 'ORANGE_MONEY',
+        amount: data.amount,
+        status: 'PENDING',
+      };
+    }
+
+    throw new Error('Méthode de paiement non supportée');
   },
 
-  // Vérifier le statut d'un paiement
   async getPaymentStatus(bookingId: string): Promise<PaymentStatus | null> {
-    const response = await ApiClient.get<PaymentStatus>(`/payments/${bookingId}/status`);
-    return response.success ? response.data || null : null;
+    if (supabaseEnabled && supabase) {
+      const { data } = await supabase
+        .from('bookings')
+        .select('status, payment_method')
+        .eq('id', bookingId)
+        .single();
+      if (!data) return null;
+      return {
+        status: data.payment_method ? 'COMPLETED' : 'NO_PAYMENT',
+        method: data.payment_method as PaymentMethod | undefined,
+      };
+    }
+    return null;
   },
 
-  // Rediriger vers le paiement externe
   redirectToPayment(redirectUrl: string): void {
     window.location.href = redirectUrl;
   }
 };
+

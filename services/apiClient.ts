@@ -1,9 +1,10 @@
 // Configuration de l'API
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_ROOT_URL = API_BASE_URL.replace(/\/api$/, '');
 const API_TIMEOUT = 30000; // 30 secondes
 
 // Warm-up : réveille le serveur dès le chargement de l'app
-const HEALTH_URL = API_BASE_URL.replace(/\/api$/, '') + '/health';
+const HEALTH_URL = API_ROOT_URL + '/health';
 fetch(HEALTH_URL).catch(() => {});
 
 // Helper pour ajouter timeout aux fetch avec retry automatique
@@ -157,5 +158,5 @@ class ApiClient {
   }
 }
 
-export { ApiClient, TokenManager, API_BASE_URL };
+export { ApiClient, TokenManager, API_BASE_URL, API_ROOT_URL };
 export type { ApiResponse };

@@ -1,134 +1,44 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+import { supabase, supabaseEnabled, DbRide, DbProfile } from './supabase';
+import { ApiClient, API_BASE_URL } from './apiClient';
+import { authService } from './authService';
 
-interface CachedResult<T> {
-  data: T;
-  timestamp: number;
+const RIDES_DB_KEY = 'sunu_yoon_rides_db';
+const BOOKINGS_DB_KEY = 'sunu_yoon_bookings_db';
+const BACKEND_ENABLED = !!API_BASE_URL;
+
+const getRidesDb = (): Record<string, Ride> => {
+  try { return JSON.parse(localStorage.getItem(RIDES_DB_KEY) || '{}'); }
+  catch { return {}; }
+};
+
+const saveRidesDb = (db: Record<string, Ride>): void => {
+  localStorage.setItem(RIDES_DB_KEY, JSON.stringify(db));
+};
+
+interface LocalBooking {
+  id: string; rideId: string; userId: string;
+  seats: number; status: string; createdAt: string;
+  paymentMethod?: string | null;
 }
 
-const searchCache = new Map<string, CachedResult<Ride[]>>();
-const CACHE_DURATION_MS = 2 * 60 * 1000;
-
-const getCacheKey = (origin?: string, destination?: string, date?: string, seats?: number): string => {
-  return [origin || '', destination || '', date || '', seats ?? ''].join('|');
+const getBookingsDb = (): Record<string, LocalBooking> => {
+  try { return JSON.parse(localStorage.getItem(BOOKINGS_DB_KEY) || '{}'); }
+  catch { return {}; }
 };
 
-const getCachedResult = (key: string): Ride[] | null => {
-  const cached = searchCache.get(key);
-  if (!cached) {
-    return null;
-  }
-  if (Date.now() - cached.timestamp > CACHE_DURATION_MS) {
-    searchCache.delete(key);
-    return null;
-  }
-  return cached.data;
+const saveBookingsDb = (db: Record<string, LocalBooking>): void => {
+  localStorage.setItem(BOOKINGS_DB_KEY, JSON.stringify(db));
 };
 
-const saveCachedResult = (key: string, data: Ride[]) => {
-  searchCache.set(key, { data, timestamp: Date.now() });
+const getLocalCurrentUser = () => {
+  try { return JSON.parse(localStorage.getItem('sunu_yoon_user') || 'null'); }
+  catch { return null; }
 };
 
-const buildFallbackRides = (): Ride[] => {
-  const firstDate = new Date();
-  firstDate.setDate(firstDate.getDate() + 1);
-  firstDate.setHours(8, 0, 0, 0);
+const genId = (prefix: string) =>
+  prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-  const secondDate = new Date();
-  secondDate.setDate(secondDate.getDate() + 1);
-  secondDate.setHours(10, 30, 0, 0);
 
-  return [
-    {
-      id: 'fallback_registered_dakar_thies',
-      type: 'registered',
-      isGuest: false,
-      driver: {
-        id: 'fallback_driver_1',
-        firstName: 'Ousmane',
-        lastName: 'Sall',
-        name: 'Ousmane Sall',
-        avatarUrl: 'https://ui-avatars.com/api/?name=Ousmane+Sall&background=10b981&color=fff',
-        rating: 4.7,
-        reviewCount: 18,
-        isVerified: true,
-        isGuest: false,
-        phone: '+221776543210'
-      },
-      driverContact: null,
-      origin: 'Dakar',
-      originAddress: 'Dakar, Liberté 6',
-      destination: 'Thiès',
-      destinationAddress: 'Thiès, Centre-ville',
-      departureTime: firstDate.toISOString(),
-      duration: '1h 30m',
-      estimatedDuration: 90,
-      price: 2500,
-      currency: 'XOF',
-      seatsAvailable: 3,
-      totalSeats: 4,
-      carModel: 'Toyota Corolla',
-      description: 'Départ ponctuel le matin, bagages cabine acceptés.',
-      features: ['Climatisation', 'Bagages acceptés'],
-      status: 'OPEN',
-      createdAt: new Date().toISOString(),
-      distance: null,
-      originCoords: null,
-      destinationCoords: null,
-      passengers: []
-    },
-    {
-      id: 'fallback_registered_dakar_touba',
-      type: 'registered',
-      isGuest: false,
-      driver: {
-        id: 'fallback_driver_2',
-        firstName: 'Awa',
-        lastName: 'Diop',
-        name: 'Awa Diop',
-        avatarUrl: 'https://ui-avatars.com/api/?name=Awa+Diop&background=059669&color=fff',
-        rating: 4.8,
-        reviewCount: 26,
-        isVerified: true,
-        isGuest: false,
-        phone: '+221781112233'
-      },
-      driverContact: null,
-      origin: 'Dakar',
-      originAddress: 'Dakar, Parcelles Assainies',
-      destination: 'Touba',
-      destinationAddress: 'Touba, Grande Mosquée',
-      departureTime: secondDate.toISOString(),
-      duration: '2h 45m',
-      estimatedDuration: 165,
-      price: 4500,
-      currency: 'XOF',
-      seatsAvailable: 2,
-      totalSeats: 3,
-      carModel: 'Peugeot 308',
-      description: 'Trajet direct, musique douce, pause courte.',
-      features: ['Non-fumeur', 'Musique'],
-      status: 'OPEN',
-      createdAt: new Date().toISOString(),
-      distance: null,
-      originCoords: null,
-      destinationCoords: null,
-      passengers: []
-    }
-  ];
-};
-
-const filterFallbackRides = (rides: Ride[], params: RideSearchParams): Ride[] => {
-  const origin = params.origin?.trim().toLowerCase();
-  const destination = params.destination?.trim().toLowerCase();
-  const minSeats = params.seats || 1;
-
-  return rides.filter((ride) => {
-    const matchOrigin = !origin || ride.origin.toLowerCase().includes(origin);
-    const matchDestination = !destination || ride.destination.toLowerCase().includes(destination);
-    const matchSeats = ride.seatsAvailable >= minSeats;
-    return matchOrigin && matchDestination && matchSeats;
-  });
-};
 
 type RideType = 'registered' | 'guest';
 
@@ -218,222 +128,473 @@ export interface CreateGuestRideData {
   features?: string[];
 }
 
-interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-}
-
 class RideService {
-  private getToken(): string | null {
-    try {
-      return localStorage.getItem('sunu_yoon_access_token');
-    } catch {
-      return null;
-    }
+  private _isBackendAuth(): boolean {
+    return authService.getAuthProvider() === 'backend';
   }
 
-  private getAuthHeaders(): HeadersInit {
-    const token = this.getToken();
+  private _isSupabaseAuth(): boolean {
+    return authService.getAuthProvider() === 'supabase' && !!supabaseEnabled && !!supabase;
+  }
+
+  private _backendToRide(row: any): Ride {
+    const driverName = row?.driver?.name
+      || [row?.driver?.firstName, row?.driver?.lastName].filter(Boolean).join(' ').trim()
+      || 'Conducteur';
+
     return {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      id: row.id,
+      type: row.type === 'guest' ? 'guest' : 'registered',
+      isGuest: !!row.isGuest,
+      driver: {
+        id: row.driver?.id || '',
+        firstName: row.driver?.firstName || driverName.split(' ')[0] || 'Conducteur',
+        lastName: row.driver?.lastName || driverName.split(' ').slice(1).join(' ') || '',
+        name: driverName,
+        avatarUrl: row.driver?.avatarUrl,
+        rating: row.driver?.rating ?? null,
+        reviewCount: row.driver?.reviewCount ?? 0,
+        isVerified: row.driver?.isVerified ?? false,
+        isGuest: row.driver?.isGuest ?? !!row.isGuest,
+        phone: row.driver?.phone
+      },
+      driverContact: row.driverContact || null,
+      origin: row.origin,
+      originAddress: row.originAddress || null,
+      destination: row.destination,
+      destinationAddress: row.destinationAddress || null,
+      departureTime: row.departureTime,
+      duration: row.duration || '2h 00m',
+      estimatedDuration: row.estimatedDuration ?? null,
+      price: row.price,
+      currency: row.currency || 'XOF',
+      seatsAvailable: row.seatsAvailable,
+      totalSeats: row.totalSeats,
+      carModel: row.carModel || null,
+      description: row.description || null,
+      features: row.features || [],
+      status: row.status || 'OPEN',
+      createdAt: row.createdAt || new Date().toISOString(),
+      distance: row.distance ?? null,
+      originCoords: row.originCoords || null,
+      destinationCoords: row.destinationCoords || null,
+      passengers: row.passengers || []
     };
   }
 
+  private async _fetchBackendRides(params: RideSearchParams = {}): Promise<Ride[]> {
+    const searchParams = new URLSearchParams();
+    if (params.origin?.trim()) searchParams.set('origin', params.origin.trim());
+    if (params.destination?.trim()) searchParams.set('destination', params.destination.trim());
+    if (params.date?.trim()) searchParams.set('date', params.date.trim());
+    if (params.seats) searchParams.set('seats', params.seats.toString());
+
+    const response = await fetch(`${API_BASE_URL}/rides${searchParams.toString() ? `?${searchParams.toString()}` : ''}`);
+    if (!response.ok) {
+      throw new Error('Impossible de charger les trajets depuis le backend.');
+    }
+
+    const payload = await response.json();
+    return (payload?.data?.rides || []).map((ride: any) => this._backendToRide(ride));
+  }
+
+  // ── Convertisseur DB→Ride ──────────────────────────────────────────────────
+  private _dbToRide(row: DbRide & { driver?: DbProfile }): Ride {
+    const driver = row.driver;
+    const fullName = driver?.name || 'Conducteur';
+    const dur = row.estimated_duration
+      ? `${Math.floor(row.estimated_duration / 60)}h ${String(row.estimated_duration % 60).padStart(2, '0')}m`
+      : '2h 00m';
+    return {
+      id: row.id,
+      type: 'registered',
+      isGuest: false,
+      driver: {
+        id: row.driver_id,
+        firstName: fullName.split(' ')[0] || '',
+        lastName: fullName.split(' ').slice(1).join(' ') || '',
+        name: fullName,
+        avatarUrl: driver?.avatar_url ||
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=10b981&color=fff`,
+        rating: driver?.rating ?? 5.0,
+        reviewCount: driver?.review_count ?? 0,
+        isVerified: driver?.is_verified ?? true,
+        isGuest: false,
+      },
+      driverContact: null,
+      origin: row.origin,
+      originAddress: row.origin_address,
+      destination: row.destination,
+      destinationAddress: row.destination_address,
+      departureTime: row.departure_time,
+      duration: dur,
+      estimatedDuration: row.estimated_duration,
+      price: row.price,
+      currency: row.currency,
+      seatsAvailable: row.seats_available,
+      totalSeats: row.total_seats,
+      carModel: row.car_model,
+      description: row.description,
+      features: row.features || [],
+      status: row.status,
+      createdAt: row.created_at,
+      distance: null,
+      originCoords: null,
+      destinationCoords: null,
+      passengers: [],
+    };
+  }
+
+  // ── searchRides ────────────────────────────────────────────────────────────
   async searchRides(params: RideSearchParams = {}): Promise<Ride[]> {
-    const cacheKey = getCacheKey(params.origin, params.destination, params.date, params.seats);
-    const cached = getCachedResult(cacheKey);
-    if (cached) {
-      return cached;
+    if (BACKEND_ENABLED) {
+      try {
+        return await this._fetchBackendRides(params);
+      } catch {
+        // Fallback Supabase/local si le backend n'est pas disponible.
+      }
     }
 
-    try {
-      const queryParams = new URLSearchParams();
-      if (params.origin) queryParams.append('origin', params.origin);
-      if (params.destination) queryParams.append('destination', params.destination);
-      if (params.date) queryParams.append('date', params.date);
-      if (params.seats) queryParams.append('seats', params.seats.toString());
+    if (this._isSupabaseAuth()) {
+      let query = supabase
+        .from('rides')
+        .select('*, driver:profiles(*)')
+        .eq('status', 'OPEN')
+        .gte('seats_available', params.seats || 1)
+        .order('departure_time', { ascending: true });
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000);
-
-      const response = await fetch(`${API_URL}/rides?${queryParams.toString()}`, {
-        method: 'GET',
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        console.error('Search rides failed:', response.status);
-        const fallback = filterFallbackRides(buildFallbackRides(), params);
-        saveCachedResult(cacheKey, fallback);
-        return fallback;
+      if (params.origin?.trim()) {
+        query = query.ilike('origin', `%${params.origin.trim()}%`);
+      }
+      if (params.destination?.trim()) {
+        query = query.ilike('destination', `%${params.destination.trim()}%`);
       }
 
-      const payload: ApiResponse<{ rides: Ride[]; total: number }> = await response.json();
-      const rides = Array.isArray(payload?.data?.rides) ? payload.data.rides : [];
-      const resolvedRides = rides.length > 0 ? rides : filterFallbackRides(buildFallbackRides(), params);
-      saveCachedResult(cacheKey, resolvedRides);
-      return resolvedRides;
-    } catch (error: any) {
-      if (error?.name === 'AbortError') {
-        const fallback = filterFallbackRides(buildFallbackRides(), params);
-        saveCachedResult(cacheKey, fallback);
-        return fallback;
-      }
-      console.error('Search rides error:', error);
-      const fallback = filterFallbackRides(buildFallbackRides(), params);
-      saveCachedResult(cacheKey, fallback);
-      return fallback;
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).map(r => this._dbToRide(r as DbRide & { driver: DbProfile }));
     }
+    // Fallback localStorage
+    const db = getRidesDb();
+    const origin = params.origin?.trim().toLowerCase();
+    const destination = params.destination?.trim().toLowerCase();
+    const minSeats = params.seats || 1;
+    return Object.values(db)
+      .filter(ride => {
+        const matchOrigin = !origin ||
+          ride.origin.toLowerCase().includes(origin) ||
+          (ride.originAddress?.toLowerCase().includes(origin) ?? false);
+        const matchDest = !destination ||
+          ride.destination.toLowerCase().includes(destination) ||
+          (ride.destinationAddress?.toLowerCase().includes(destination) ?? false);
+        return matchOrigin && matchDest && ride.seatsAvailable >= minSeats && ride.status === 'OPEN';
+      })
+      .sort((a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime());
   }
 
+  // ── getRide ────────────────────────────────────────────────────────────────
   async getRide(id: string): Promise<Ride | null> {
-    try {
-      const response = await fetch(`${API_URL}/rides/${id}`, {
-        method: 'GET'
-      });
-
-      if (!response.ok) {
-        return null;
+    if (BACKEND_ENABLED) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/rides/${id}`);
+        if (response.ok) {
+          const payload = await response.json();
+          if (payload?.data?.ride) {
+            return this._backendToRide(payload.data.ride);
+          }
+        }
+      } catch {
+        // Fallback Supabase/local
       }
-
-      const payload: ApiResponse<{ ride: Ride; userBooking: { id: string; seats: number } | null }> = await response.json();
-      return payload?.data?.ride ?? null;
-    } catch (error) {
-      console.error('Get ride error:', error);
-      return null;
     }
+
+    if (this._isSupabaseAuth()) {
+      const { data, error } = await supabase
+        .from('rides')
+        .select('*, driver:profiles(*)')
+        .eq('id', id)
+        .single();
+      if (error || !data) return null;
+      return this._dbToRide(data as DbRide & { driver: DbProfile });
+    }
+    return getRidesDb()[id] ?? null;
   }
 
+  // ── createRide ─────────────────────────────────────────────────────────────
   async createRide(data: CreateRideData): Promise<Ride> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const user = getLocalCurrentUser();
+    if (!user) throw new Error('Vous devez être connecté pour créer un trajet.');
 
-    try {
-      const response = await fetch(`${API_URL}/rides`, {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify(data),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.message || 'Erreur lors de la creation du trajet');
+    if (this._isBackendAuth()) {
+      const response = await ApiClient.post<{ ride: { id: string } }>('/rides', data);
+      if (!response.success || !response.data?.ride?.id) {
+        throw new Error(response.error?.message || response.message || 'Impossible de publier ce trajet.');
       }
 
-    const payload: ApiResponse<{ ride: Ride }> = await response.json();
-    searchCache.clear();
-    if (!payload?.data?.ride) {
-      throw new Error('Reponse invalide du serveur.');
+      const createdRide = await this.getRide(response.data.ride.id);
+      if (!createdRide) {
+        throw new Error('Trajet créé mais introuvable au rechargement.');
+      }
+      return createdRide;
     }
-    return payload.data.ride;
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps a repondre (en veille). Reessayez.');
-      throw error;
+
+    if (this._isSupabaseAuth()) {
+      const { data: row, error } = await supabase
+        .from('rides')
+        .insert({
+          driver_id: user.id,
+          origin: data.originCity,
+          origin_address: data.originAddress || data.originCity,
+          destination: data.destinationCity,
+          destination_address: data.destinationAddress || data.destinationCity,
+          departure_time: data.departureTime,
+          estimated_duration: data.estimatedDuration || 120,
+          price: data.pricePerSeat,
+          seats_available: data.totalSeats,
+          total_seats: data.totalSeats,
+          car_model: data.carModel || null,
+          features: data.features || [],
+          description: data.description || null,
+          status: 'OPEN',
+        })
+        .select('*, driver:profiles(*)')
+        .single();
+      if (error) throw new Error(error.message);
+      return this._dbToRide(row as DbRide & { driver: DbProfile });
     }
+
+    // Fallback localStorage
+    const fullName = user.name || [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Conducteur';
+    const id = genId('ride');
+    const dur = data.estimatedDuration
+      ? `${Math.floor(data.estimatedDuration / 60)}h ${String(data.estimatedDuration % 60).padStart(2, '0')}m`
+      : '2h 00m';
+    const ride: Ride = {
+      id, type: 'registered', isGuest: false,
+      driver: {
+        id: user.id,
+        firstName: user.firstName || fullName.split(' ')[0] || '',
+        lastName: user.lastName || fullName.split(' ').slice(1).join(' ') || '',
+        name: fullName,
+        avatarUrl: user.avatarUrl ||
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=10b981&color=fff`,
+        rating: user.rating ?? 5.0, reviewCount: user.reviewCount ?? 0,
+        isVerified: true, isGuest: false, phone: user.phone || ''
+      },
+      driverContact: user.phone ? {
+        phone: user.phone,
+        whatsappUrl: `https://wa.me/${user.phone.replace(/\D/g, '')}`,
+        callUrl: `tel:${user.phone}`
+      } : null,
+      origin: data.originCity, originAddress: data.originAddress || data.originCity,
+      destination: data.destinationCity, destinationAddress: data.destinationAddress || data.destinationCity,
+      departureTime: data.departureTime,
+      duration: dur, estimatedDuration: data.estimatedDuration || 120,
+      price: data.pricePerSeat, currency: 'XOF',
+      seatsAvailable: data.totalSeats, totalSeats: data.totalSeats,
+      carModel: data.carModel || null, description: data.description || null,
+      features: data.features || [], status: 'OPEN',
+      createdAt: new Date().toISOString(),
+      distance: data.distance || null, originCoords: null, destinationCoords: null, passengers: []
+    };
+    const db = getRidesDb(); db[id] = ride; saveRidesDb(db);
+    return ride;
   }
 
   async createGuestRide(data: CreateGuestRideData): Promise<Ride> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    if (BACKEND_ENABLED) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/rides/guest`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
 
-    try {
-      const response = await fetch(`${API_URL}/rides/guest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.message || 'Erreur lors de la publication du trajet');
+        if (response.ok) {
+          const payload = await response.json();
+          if (payload?.data?.ride) {
+            return this._backendToRide(payload.data.ride);
+          }
+        }
+      } catch {
+        // Fallback local si le backend n'est pas disponible.
       }
+    }
 
-    const payload: ApiResponse<{ ride: Ride }> = await response.json();
-    searchCache.clear();
-    if (!payload?.data?.ride) {
-      throw new Error('Reponse invalide du serveur.');
-    }
-    return payload.data.ride;
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps a repondre (en veille). Reessayez.');
-      throw error;
-    }
+    const fullName = data.driverName;
+    const id = genId('ride');
+    const dur = data.estimatedDuration
+      ? `${Math.floor(data.estimatedDuration / 60)}h ${String(data.estimatedDuration % 60).padStart(2, '0')}m`
+      : '2h 00m';
+    const ride: Ride = {
+      id, type: 'guest', isGuest: true,
+      driver: {
+        id: 'guest_' + id,
+        firstName: fullName.split(' ')[0] || fullName,
+        lastName: fullName.split(' ').slice(1).join(' ') || '',
+        name: fullName,
+        avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=059669&color=fff`,
+        rating: null, reviewCount: 0, isVerified: false, isGuest: true, phone: data.driverPhone
+      },
+      driverContact: {
+        phone: data.driverPhone,
+        whatsappUrl: `https://wa.me/${data.driverPhone.replace(/\D/g, '')}`,
+        callUrl: `tel:${data.driverPhone}`
+      },
+      origin: data.originCity, originAddress: data.originAddress || data.originCity,
+      destination: data.destinationCity, destinationAddress: data.destinationAddress || data.destinationCity,
+      departureTime: data.departureTime,
+      duration: dur, estimatedDuration: data.estimatedDuration || 120,
+      price: data.pricePerSeat, currency: 'XOF',
+      seatsAvailable: data.availableSeats ?? data.totalSeats ?? 3,
+      totalSeats: data.totalSeats ?? data.availableSeats ?? 3,
+      carModel: data.carModel || null, description: data.description || null,
+      features: data.features || [], status: 'OPEN',
+      createdAt: new Date().toISOString(),
+      distance: null, originCoords: null, destinationCoords: null, passengers: []
+    };
+    const db = getRidesDb(); db[id] = ride; saveRidesDb(db);
+    return ride;
   }
 
+  // ── getMyRides ─────────────────────────────────────────────────────────────
   async getMyRides(): Promise<Ride[]> {
-    try {
-      const response = await fetch(`${API_URL}/rides/my-rides`, {
-        method: 'GET',
-        headers: this.getAuthHeaders()
-      });
+    const user = getLocalCurrentUser();
+    if (!user) return [];
 
-      if (!response.ok) {
-        return [];
+    if (this._isBackendAuth()) {
+      const response = await ApiClient.get<{ rides: any[] }>('/rides/my-rides');
+      if (!response.success) {
+        throw new Error(response.error?.message || response.message || 'Impossible de charger vos trajets.');
       }
-
-      const payload: ApiResponse<{ rides: Ride[] }> = await response.json();
-      return Array.isArray(payload?.data?.rides) ? payload.data.rides : [];
-    } catch (error) {
-      console.error('Get my rides error:', error);
-      return [];
+      return (response.data?.rides || []).map((ride) => this._backendToRide(ride));
     }
+
+    if (this._isSupabaseAuth()) {
+      const { data, error } = await supabase
+        .from('rides')
+        .select('*, driver:profiles(*)')
+        .eq('driver_id', user.id)
+        .order('departure_time', { ascending: false });
+      if (error) return [];
+      return (data || []).map(r => this._dbToRide(r as DbRide & { driver: DbProfile }));
+    }
+    const db = getRidesDb();
+    return Object.values(db).filter(ride => ride.driver.id === user.id);
   }
 
+  // ── cancelRide ─────────────────────────────────────────────────────────────
   async cancelRide(id: string): Promise<boolean> {
-    try {
-      const response = await fetch(`${API_URL}/rides/${id}/cancel`, {
-        method: 'POST',
-        headers: this.getAuthHeaders()
-      });
-      if (response.ok) {
-        searchCache.clear();
+    if (this._isBackendAuth()) {
+      const response = await ApiClient.post(`/rides/${id}/cancel`);
+      if (!response.success) {
+        throw new Error(response.error?.message || response.message || 'Impossible d\'annuler ce trajet.');
       }
-      return response.ok;
-    } catch (error) {
-      console.error('Cancel ride error:', error);
-      return false;
+      return true;
     }
+
+    if (this._isSupabaseAuth()) {
+      const { error } = await supabase
+        .from('rides')
+        .update({ status: 'CANCELLED' })
+        .eq('id', id);
+      return !error;
+    }
+    const db = getRidesDb();
+    if (!db[id]) return false;
+    db[id].status = 'CANCELLED';
+    saveRidesDb(db);
+    return true;
   }
 
-  async bookRide(rideId: string, seats: number = 1): Promise<{ bookingId: string }> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+  // ── bookRide ───────────────────────────────────────────────────────────────
+  async bookRide(rideId: string, seats: number = 1, paymentMethod?: string): Promise<{ bookingId: string }> {
+    const user = getLocalCurrentUser();
 
-    try {
-      const response = await fetch(`${API_URL}/bookings`, {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify({ rideId, seats }),
-        signal: controller.signal
+    if (this._isBackendAuth()) {
+      const response = await ApiClient.post<{ booking: { id: string } }>('/bookings', {
+        rideId,
+        seats,
+        paymentMethod: paymentMethod || null
       });
-      clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.message || 'Erreur lors de la reservation');
+      if (!response.success || !response.data?.booking?.id) {
+        throw new Error(response.error?.message || response.message || 'Erreur lors de la réservation.');
       }
 
-    const payload: ApiResponse<{ booking: { id: string } }> = await response.json();
-    searchCache.clear();
-    const bookingId = payload?.data?.booking?.id;
-    if (!bookingId) {
-      throw new Error('Reponse invalide du serveur.');
+      return { bookingId: response.data.booking.id };
     }
+
+    if (this._isSupabaseAuth()) {
+      // Lire le trajet pour vérifier les places
+      const { data: ride, error: rideErr } = await supabase
+        .from('rides')
+        .select('seats_available, price')
+        .eq('id', rideId)
+        .single();
+      if (rideErr || !ride) throw new Error('Trajet introuvable.');
+      if (ride.seats_available < seats)
+        throw new Error(`Seulement ${ride.seats_available} place(s) disponible(s).`);
+
+      if (!user) throw new Error('Vous devez être connecté pour réserver.');
+
+      // Décrémenter les places
+      const { error: updateErr } = await supabase
+        .from('rides')
+        .update({ seats_available: ride.seats_available - seats })
+        .eq('id', rideId);
+      if (updateErr) throw new Error('Impossible de réserver ce trajet.');
+
+      // Créer la réservation
+      const { data: booking, error: bookErr } = await supabase
+        .from('bookings')
+        .insert({
+          ride_id: rideId,
+          passenger_id: user.id,
+          seats,
+          total_price: ride.price * seats,
+          status: 'PENDING',
+          payment_method: paymentMethod || null,
+        })
+        .select('id')
+        .single();
+      if (bookErr) throw new Error('Erreur lors de la réservation.');
+      return { bookingId: booking.id };
+    }
+
+    // Fallback localStorage
+    await new Promise(r => setTimeout(r, 600));
+    const db = getRidesDb();
+    const ride = db[rideId];
+    if (!ride) throw new Error('Trajet introuvable.');
+    if (ride.seatsAvailable < seats)
+      throw new Error(`Seulement ${ride.seatsAvailable} place(s) disponible(s).`);
+
+    const bookingId = genId('booking');
+    ride.seatsAvailable -= seats;
+    ride.status = ride.seatsAvailable <= 0 ? 'FULL' : 'OPEN';
+    if (user) {
+      ride.passengers = [...(ride.passengers || []), {
+        id: user.id, bookingId,
+        name: user.name || [user.firstName, user.lastName].filter(Boolean).join(' '),
+        avatarUrl: user.avatarUrl, seats, status: 'PENDING'
+      }];
+    }
+    db[rideId] = ride; saveRidesDb(db);
+    const bookingsDb = getBookingsDb();
+    bookingsDb[bookingId] = {
+      id: bookingId,
+      rideId,
+      userId: user?.id || 'guest',
+      seats,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+      paymentMethod: paymentMethod || null
+    };
+    saveBookingsDb(bookingsDb);
     return { bookingId };
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      if (error?.name === 'AbortError') throw new Error('Le serveur met trop de temps a repondre. Reessayez.');
-      throw error;
-    }
   }
 }
 

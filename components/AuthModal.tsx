@@ -98,9 +98,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, initi
     });
     
     if (result.success) {
-      setVerificationPhone(formatPhoneNumber(registerPhone));
-      setStep('verify');
-      setSuccess('Compte créé ! Vérifiez votre téléphone pour le code de confirmation.');
+      if (result.requiresVerification) {
+        setVerificationPhone(formatPhoneNumber(registerPhone));
+        setStep('verify');
+        setSuccess('Compte créé ! Vérifiez votre téléphone pour le code de confirmation.');
+      } else {
+        setSuccess('✅ Compte créé avec succès !');
+        setTimeout(() => {
+          onClose();
+          onSuccess?.();
+          resetForm();
+        }, 600);
+      }
     } else {
       setError(result.error || 'Erreur lors de l\'inscription');
     }

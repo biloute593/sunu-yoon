@@ -45,7 +45,9 @@ const allowedOrigins = Array.from(new Set([
   'https://sunu-yoon-app.web.app',
   'https://sunu-yoon-app.firebaseapp.com',
   'http://localhost:5173',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000'
 ]));
 
 const corsOrigin: cors.CorsOptions['origin'] = (origin, callback) => {

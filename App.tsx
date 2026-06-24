@@ -9,6 +9,9 @@ import { Icons } from './components/Icons';
 import LiveTrackingPanel from './components/LiveTrackingPanel';
 import RideRequest from './components/RideRequest';
 import DriverDashboard from './components/DriverDashboard';
+import DriverBanner from './components/DriverBanner';
+import FAQSection from './components/FAQ';
+import AppDownloadBanner from './components/AppDownloadBanner';
 import { messageService, Conversation } from './services/messageService';
 import { rideService, Ride as ApiRide, RideSearchParams } from './services/rideService';
 import { bookingService, Booking } from './services/bookingService';
@@ -1476,32 +1479,67 @@ const PublishForm: React.FC<{
 
 const ProfileView: React.FC<{ 
   onNavigate: (v: string) => void,
+  onOpenConversation: (target: ChatTarget) => void,
   refreshKey?: number
-}> = ({ onNavigate, refreshKey = 0 }) => {
+}> = ({ onNavigate, onOpenConversation, refreshKey = 0 }) => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'bookings' | 'announcements'>('bookings');
   const [myRides, setMyRides] = useState<Ride[]>([]);
   const [myBookings, setMyBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [pendingCancellationId, setPendingCancellationId] = useState<string | null>(null);
+  const [bookingFeedback, setBookingFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [rides, bookings] = await Promise.all([
+        rideService.getMyRides(),
+        bookingService.getMyBookings()
+      ]);
+      setMyRides(rides.map(mapApiRideToRide));
+      setMyBookings(bookings);
+    } catch (error) {
+      console.error('Erreur chargement données:', error);
+      setBookingFeedback({ type: 'error', message: 'Impossible de charger vos réservations pour le moment.' });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        const [rides, bookings] = await Promise.all([
-          rideService.getMyRides(),
-          bookingService.getMyBookings()
-        ]);
-        setMyRides(rides.map(mapApiRideToRide));
-        setMyBookings(bookings);
-      } catch (error) {
-        console.error('Erreur chargement données:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     loadData();
-  }, [refreshKey]);
+  }, [loadData, refreshKey]);
+
+  const handleCancelBooking = useCallback(async (bookingId: string) => {
+    setPendingCancellationId(bookingId);
+    setBookingFeedback(null);
+
+    try {
+      const result = await bookingService.cancelBooking(bookingId);
+      if (!result.success) {
+        setBookingFeedback({
+          type: 'error',
+          message: result.error || 'Impossible d\'annuler cette réservation.'
+        });
+        return;
+      }
+
+      setBookingFeedback({
+        type: 'success',
+        message: result.message || 'Réservation annulée.'
+      });
+      await loadData();
+    } catch (error) {
+      console.error('Erreur annulation réservation:', error);
+      setBookingFeedback({
+        type: 'error',
+        message: 'Une erreur est survenue pendant l\'annulation.'
+      });
+    } finally {
+      setPendingCancellationId(null);
+    }
+  }, [loadData]);
 
   if (!user) return null;
 
@@ -1572,6 +1610,11 @@ const ProfileView: React.FC<{
 
       {/* Content */}
       <div className="space-y-4">
+        {bookingFeedback && (
+          <div className={`rounded-xl border px-4 py-3 text-sm ${bookingFeedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-700'}`}>
+            {bookingFeedback.message}
+          </div>
+        )}
         {isLoading ? (
           <div className="text-center py-12">
             <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -1589,6 +1632,9 @@ const ProfileView: React.FC<{
           ) : (
             myRides.map(ride => (
               <div key={ride.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+                {(() => {
+                  const reservedSeats = Math.max((ride.totalSeats || 0) - ride.seatsAvailable, 0);
+                  return (
                 <div>
                   <div className="font-bold text-gray-900 mb-1">
                     {new Date(ride.departureTime).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} à {new Date(ride.departureTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -1600,8 +1646,11 @@ const ProfileView: React.FC<{
                   </div>
                   <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
                     <span className="flex items-center gap-1"><Icons.Users size={12} /> {ride.seatsAvailable} places restantes</span>
+                    {reservedSeats > 0 && <span>{reservedSeats} réservation{reservedSeats > 1 ? 's' : ''}</span>}
                   </div>
                 </div>
+                  );
+                })()}
                 <div className="text-right">
                   <span className="block font-bold text-emerald-600">{ride.price} {ride.currency}</span>
                 </div>
@@ -1653,6 +1702,32 @@ const ProfileView: React.FC<{
                       <span>Conducteur: {booking.ride.driver.name}</span>
                     </div>
                     <span className="font-bold text-emerald-600">{booking.totalPrice.toLocaleString('fr-FR')} XOF</span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {booking.status !== 'CANCELLED' && (
+                      <button
+                        onClick={() => onOpenConversation({
+                          recipientId: booking.ride.driver.id,
+                          recipientName: booking.ride.driver.name,
+                          recipientAvatar: booking.ride.driver.avatarUrl,
+                          rideId: booking.ride.id
+                        })}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors"
+                      >
+                        <Icons.MessageCircle size={16} />
+                        Contacter le chauffeur
+                      </button>
+                    )}
+                    {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
+                      <button
+                        onClick={() => handleCancelBooking(booking.id)}
+                        disabled={pendingCancellationId === booking.id}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 hover:border-red-200 hover:bg-red-50 text-sm font-semibold text-gray-700 hover:text-red-600 rounded-lg transition-colors disabled:opacity-60"
+                      >
+                        <Icons.X size={16} />
+                        {pendingCancellationId === booking.id ? 'Annulation...' : 'Annuler la réservation'}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -1708,6 +1783,7 @@ const ChatSpace: React.FC<{
           <Icons.MessageCircle className="mx-auto text-gray-300 mb-3" size={32} />
           <h3 className="text-lg font-semibold text-gray-900">Aucune conversation</h3>
           <p className="text-gray-500 mt-1">Vos discussions avec les chauffeurs apparaîtront ici.</p>
+          <p className="text-sm text-gray-400 mt-2">Réservez un trajet puis utilisez “Contacter le chauffeur” depuis Mes Réservations.</p>
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -1767,7 +1843,7 @@ const ChatSpace: React.FC<{
 // --- MAIN APP COMPONENT ---
 
 function AppContent() {
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isInitializing: authLoading } = useAuth();
   
   const [currentView, setCurrentView] = useState('home'); 
   const [searchResults, setSearchResults] = useState<Ride[]>([]);
@@ -1966,6 +2042,7 @@ function AppContent() {
   const handleBookingSuccess = (bookingId: string) => {
     console.log('Réservation réussie:', bookingId);
     setShowBookingModal(false);
+    setProfileRefreshKey(prev => prev + 1);
     setCurrentView('profile');
   };
 
@@ -2038,6 +2115,11 @@ function AppContent() {
                  </div>
                </div>
 
+               {/* Banner Conducteur */}
+               <div className="max-w-4xl mx-auto mb-10 px-0">
+                 <DriverBanner onPublish={() => setCurrentView('publish')} />
+               </div>
+
                {/* Trajets disponibles */}
                <div className="max-w-4xl mx-auto mt-4 mb-12">
                  <div className="flex items-center justify-between mb-6">
@@ -2055,10 +2137,15 @@ function AppContent() {
                  {recentRidesLoading ? (
                    <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                      {[1,2,3].map(i => (
-                       <div key={i} className="min-h-[220px] bg-white rounded-2xl border border-gray-100 p-6 animate-pulse">
-                         <div className="h-5 bg-gray-200 rounded w-1/2 mb-4"></div>
-                         <div className="h-4 bg-gray-100 rounded w-3/4 mb-2"></div>
-                         <div className="h-4 bg-gray-100 rounded w-2/3"></div>
+                       <div key={i} className="min-h-[220px] bg-white rounded-2xl border border-gray-100 p-6 flex flex-col justify-between">
+                         <div>
+                           <div className="h-5 skeleton rounded w-1/2 mb-4"></div>
+                           <div className="space-y-2">
+                             <div className="h-4 skeleton rounded w-3/4 mb-2"></div>
+                             <div className="h-4 skeleton rounded w-2/3"></div>
+                           </div>
+                         </div>
+                         <div className="h-10 skeleton rounded-xl w-full mt-4"></div>
                        </div>
                      ))}
                    </div>
@@ -2081,6 +2168,16 @@ function AppContent() {
                      ))}
                    </div>
                  )}
+               </div>
+
+               {/* Suivi GPS Temps Réel */}
+               <div className="max-w-4xl mx-auto mb-16">
+                 <LiveTrackingPanel userLocation={userLocation.coords} />
+               </div>
+
+               {/* Questions Fréquentes / FAQ */}
+               <div className="max-w-4xl mx-auto pt-12 border-t border-gray-100">
+                 <FAQSection />
                </div>
             </div>
           </>
@@ -2158,19 +2255,23 @@ function AppContent() {
               {isLoading ? (
                  <div className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
                    {[1,2,3,4,5,6].map(i => (
-                     <div key={i} className="min-h-[320px] bg-white rounded-2xl border border-gray-100 p-7 animate-pulse flex flex-col shadow-sm">
+                     <div key={i} className="min-h-[320px] bg-white rounded-2xl border border-gray-100 p-7 flex flex-col shadow-sm">
                        <div className="flex justify-between mb-6">
                          <div className="space-y-4 flex-1">
-                           <div className="h-5 bg-gray-200 rounded w-2/5"></div>
-                           <div className="h-4 bg-gray-100 rounded w-3/5"></div>
+                           <div className="h-5 skeleton rounded w-2/5"></div>
+                           <div className="h-4 skeleton rounded w-3/5"></div>
                          </div>
-                         <div className="h-8 bg-gray-200 rounded-lg w-24"></div>
+                         <div className="h-8 skeleton rounded-lg w-24"></div>
+                       </div>
+                       <div className="space-y-3 my-4">
+                         <div className="h-4 skeleton rounded w-4/5"></div>
+                         <div className="h-4 skeleton rounded w-3/4"></div>
                        </div>
                        <div className="flex items-center gap-4 mt-auto pt-6 border-t border-gray-100">
-                         <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
+                         <div className="w-12 h-12 skeleton rounded-full"></div>
                          <div className="space-y-2 flex-1">
-                           <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                           <div className="h-3 bg-gray-100 rounded w-1/2"></div>
+                           <div className="h-4 skeleton rounded w-2/3"></div>
+                           <div className="h-3 skeleton rounded w-1/2"></div>
                          </div>
                        </div>
                      </div>
@@ -2251,7 +2352,16 @@ function AppContent() {
            setCurrentView('home');
            return null;
         }
-        return <ProfileView onNavigate={setCurrentView} refreshKey={profileRefreshKey} />;
+        return (
+          <ProfileView
+            onNavigate={setCurrentView}
+            onOpenConversation={(target) => {
+              setChatTarget(target);
+              setShowChatWindow(true);
+            }}
+            refreshKey={profileRefreshKey}
+          />
+        );
 
       case 'chat-space':
         if (!isAuthenticated || !user) {
@@ -2313,6 +2423,7 @@ function AppContent() {
     >
       {renderContent()}
       <CookieBanner />
+      <AppDownloadBanner />
       
       <AuthModal 
         isOpen={showAuthModal} 

@@ -3,58 +3,9 @@ import { Ride, RideStatus } from '../types';
 
 const getClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// Fallback data in case of API error or empty key
-const MOCK_RIDES: Ride[] = [
-  {
-    id: 'mock-1',
-    driver: {
-      id: 'd1',
-      name: 'Moussa Diop',
-      avatarUrl: 'https://picsum.photos/seed/moussa/100/100',
-      rating: 4.8,
-      reviewCount: 156,
-      isVerified: true
-    },
-    origin: 'Dakar',
-    destination: 'Saint-Louis',
-    departureTime: '2023-11-25T08:00:00',
-    price: 5000,
-    currency: 'XOF',
-    seatsAvailable: 2,
-    totalSeats: 4,
-    carModel: 'Peugeot 308',
-    features: ['Climatisation', 'Bagages'],
-    duration: '4h 30m'
-  },
-  {
-    id: 'mock-2',
-    driver: {
-      id: 'd2',
-      name: 'Fatou Ndiaye',
-      avatarUrl: 'https://picsum.photos/seed/fatou/100/100',
-      rating: 4.9,
-      reviewCount: 42,
-      isVerified: true
-    },
-    origin: 'Dakar',
-    destination: 'Touba',
-    departureTime: '2023-11-25T14:30:00',
-    price: 4500,
-    currency: 'XOF',
-    seatsAvailable: 1,
-    totalSeats: 3,
-    carModel: 'Toyota Corolla',
-    features: ['Musique', 'Non-fumeur'],
-    duration: '2h 15m'
-  }
-];
-
 export const searchRides = async (origin: string, destination: string, date: string): Promise<Ride[]> => {
   if (!process.env.API_KEY) {
-    console.warn("API Key missing, using mock data");
-    // Simulate delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return MOCK_RIDES;
+    return [];
   }
 
   try {
@@ -105,19 +56,12 @@ export const searchRides = async (origin: string, destination: string, date: str
 
     if (response.text) {
       const data = JSON.parse(response.text) as any[];
-      // Add avatars locally as Gemini can't generate image URLs reliably
-      return data.map((ride, index) => ({
-        ...ride,
-        driver: {
-          ...ride.driver,
-          avatarUrl: `https://picsum.photos/seed/${ride.driver.name.replace(' ', '')}/100/100`
-        }
-      }));
+      return data;
     }
-    return MOCK_RIDES;
+    return [];
 
   } catch (error) {
     console.error("Gemini Search Error:", error);
-    return MOCK_RIDES;
+    return [];
   }
 };

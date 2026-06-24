@@ -4,6 +4,7 @@ import { authService, AuthUser, LoginCredentials, RegisterData } from '../servic
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
+  isInitializing: boolean;
   isAuthenticated: boolean;
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; requiresVerification?: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; requiresVerification?: boolean; error?: string }>;
@@ -29,7 +30,8 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true); // uniquement pour le chargement initial
 
   // Charger l'utilisateur au démarrage
   useEffect(() => {
@@ -60,7 +62,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         authService.clearAuth();
         setUser(null);
       } finally {
-        setIsLoading(false);
+        setIsInitializing(false);
       }
     };
 
@@ -91,7 +93,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return { success: true };
     } catch (error: any) {
       console.error('Erreur de connexion:', error);
-      const msg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Erreur de connexion. Vérifiez vos identifiants.';
+      const msg = error?.isTimeout
+        ? 'Serveur en démarrage, réessayez dans 30 secondes.'
+        : error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Erreur de connexion. Vérifiez vos identifiants.';
       return { 
         success: false, 
         error: msg
@@ -114,10 +118,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUser(freshUser);
       }
       
-      return { success: true, requiresVerification: true };
+      return { success: true, requiresVerification: response.requiresVerification ?? false };
     } catch (error: any) {
       console.error('Erreur d\'inscription:', error);
-      const msg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Erreur lors de l\'inscription.';
+      const msg = error?.isTimeout
+        ? 'Serveur en démarrage, réessayez dans 30 secondes.'
+        : error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Erreur lors de l\'inscription.';
       return { 
         success: false, 
         error: msg
@@ -187,6 +193,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const value: AuthContextType = {
     user,
     isLoading,
+    isInitializing,
     isAuthenticated: !!user,
     login,
     register,

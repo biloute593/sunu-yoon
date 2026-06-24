@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { messageService, Message, Conversation } from '../services/messageService';
+import { messageService, Message } from '../services/messageService';
 import { Icons } from './Icons';
 
 interface ChatWindowProps {
@@ -41,15 +41,26 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         const conversations = await messageService.getConversations();
         const existing = conversations.find(c => 
           c.participants.some(p => p.id === recipientId)
+          && (!rideId || c.ride?.id === rideId || !c.ride)
         );
 
         if (existing) {
           setConversationId(existing.id);
           const msgs = await messageService.getMessages(existing.id);
           setMessages(msgs);
+          messageService.markAsRead(existing.id);
         } else if (rideId) {
           // Créer une nouvelle conversation
-          const newConv = await messageService.createConversation(recipientId, rideId);
+          const newConv = await messageService.createConversation(recipientId, rideId, {
+            recipientName: recipientName,
+            recipientAvatar: recipientAvatar,
+            ride: {
+              id: rideId,
+              origin: 'Trajet',
+              destination: 'Trajet',
+              departureTime: new Date().toISOString()
+            }
+          });
           setConversationId(newConv.id);
           setMessages([]);
         }
@@ -61,7 +72,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     };
 
     initChat();
-  }, [isOpen, user, recipientId, rideId]);
+  }, [isOpen, user, recipientId, recipientName, recipientAvatar, rideId]);
 
   // Initialiser WebSocket
   useEffect(() => {

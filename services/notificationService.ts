@@ -1,6 +1,7 @@
-import { ApiClient } from './apiClient';
+// Notifications stockées en localStorage — aucun backend requis
+const NOTIF_KEY = 'sunu_yoon_notifications';
 
-interface Notification {
+export interface Notification {
   id: string;
   type: string;
   title: string;
@@ -10,78 +11,71 @@ interface Notification {
   createdAt: string;
 }
 
-// Service de notifications
+const _load = (): Notification[] => {
+  try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]'); }
+  catch { return []; }
+};
+
+const _save = (notifs: Notification[]): void => {
+  localStorage.setItem(NOTIF_KEY, JSON.stringify(notifs.slice(0, 50)));
+};
+
 export const notificationService = {
-  // Obtenir les notifications
-  async getNotifications(unreadOnly: boolean = false, limit: number = 20): Promise<{
+  async getNotifications(unreadOnly = false, limit = 20): Promise<{
     notifications: Notification[];
     unreadCount: number;
   }> {
-    const params = new URLSearchParams({
-      ...(unreadOnly && { unreadOnly: 'true' }),
-      limit: limit.toString()
-    });
-
-    const response = await ApiClient.get<{
-      notifications: Notification[];
-      pagination: { unreadCount: number };
-    }>(`/notifications?${params}`);
-
-    if (response.success && response.data) {
-      return {
-        notifications: response.data.notifications,
-        unreadCount: response.data.pagination.unreadCount
-      };
-    }
-
-    return { notifications: [], unreadCount: 0 };
+    const all = _load();
+    const filtered = unreadOnly ? all.filter(n => !n.isRead) : all;
+    const unreadCount = all.filter(n => !n.isRead).length;
+    return { notifications: filtered.slice(0, limit), unreadCount };
   },
 
-  // Marquer comme lue
   async markAsRead(notificationId: string): Promise<boolean> {
-    const response = await ApiClient.put(`/notifications/${notificationId}/read`);
-    return response.success;
+    _save(_load().map(n => n.id === notificationId ? { ...n, isRead: true } : n));
+    return true;
   },
 
-  // Marquer toutes comme lues
   async markAllAsRead(): Promise<boolean> {
-    const response = await ApiClient.put('/notifications/read-all');
-    return response.success;
+    _save(_load().map(n => ({ ...n, isRead: true })));
+    return true;
   },
 
-  // Supprimer une notification
   async deleteNotification(notificationId: string): Promise<boolean> {
-    const response = await ApiClient.delete(`/notifications/${notificationId}`);
-    return response.success;
+    _save(_load().filter(n => n.id !== notificationId));
+    return true;
   },
 
-  // Compter les non lues
   async getUnreadCount(): Promise<number> {
-    const response = await ApiClient.get<{ count: number }>('/notifications/unread-count');
-    return response.success ? response.data?.count || 0 : 0;
+    return _load().filter(n => !n.isRead).length;
   },
 
-  // Demander la permission pour les notifications push
-  async requestPushPermission(): Promise<boolean> {
-    if (!('Notification' in window)) {
-      console.log('Ce navigateur ne supporte pas les notifications');
-      return false;
-    }
+  // Appelé par les autres services pour créer une notification
+  push(type: string, title: string, message: string, data?: Record<string, any>): void {
+    const notif: Notification = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      type,
+      title,
+      message,
+      data,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+    _save([notif, ..._load()]);
+    notificationService.showLocalNotification(title, { body: message });
+  },
 
+  async requestPushPermission(): Promise<boolean> {
+    if (!('Notification' in window)) return false;
     const permission = await Notification.requestPermission();
     return permission === 'granted';
   },
 
-  // Afficher une notification locale
   showLocalNotification(title: string, options?: NotificationOptions): void {
     if (Notification.permission === 'granted') {
-      new Notification(title, {
-        icon: '/icon-192.png',
-        badge: '/icon-72.png',
-        ...options
-      });
+      new Notification(title, { icon: '/icon-192.png', badge: '/icon-72.png', ...options });
     }
   }
 };
 
-export type { Notification };
+export type { Notification as NotificationType };
