@@ -143,6 +143,68 @@ router.post('/register',
   }
 );
 
+// ============ CONNEXION RAPIDE (NOM + TÉLÉPHONE) ============
+router.post('/quick-login',
+  body('phone').matches(/^(\+221|221)?[7][0-9]{8}$/).withMessage('Numéro de téléphone sénégalais invalide'),
+  body('name').isLength({ min: 2, max: 100 }).withMessage('Le nom doit avoir entre 2 et 100 caractères'),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError(errors.array()[0].msg, 400);
+      }
+
+      let { phone, name } = req.body;
+
+      // Normaliser le numéro de téléphone
+      phone = phone.replace(/^\+?221/, '').replace(/\s/g, '');
+      phone = `+221${phone}`;
+
+      let user = await prisma.user.findUnique({ where: { phone } });
+      if (!user) {
+        // Créer un utilisateur s'il n'existe pas
+        const passwordHash = await bcrypt.hash('quick_login_secret_123', 12);
+        user = await prisma.user.create({
+          data: {
+            phone,
+            name,
+            passwordHash,
+            avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=059669&color=fff`,
+            isPhoneVerified: true, // Vérifié automatiquement pour simplification
+            isVerified: true
+          }
+        });
+      }
+
+      const tokens = generateTokens(user.id, user.phone);
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { refreshToken: tokens.refreshToken }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          user: {
+            id: user.id,
+            phone: user.phone,
+            name: user.name,
+            avatarUrl: user.avatarUrl,
+            rating: user.rating,
+            reviewCount: user.reviewCount,
+            isVerified: user.isVerified,
+            isPhoneVerified: user.isPhoneVerified
+          },
+          tokens
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // ============ CONNEXION ============
 router.post('/login',
   body('phone').matches(/^(\+221|221)?[7][0-9]{8}$/).withMessage('Numéro de téléphone invalide'),

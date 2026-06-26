@@ -5,6 +5,7 @@ import CookieBanner from './components/CookieBanner';
 import AuthModal from './components/AuthModal';
 import BookingModal from './components/BookingModal';
 import ChatWindow from './components/ChatWindow';
+import { QuickBookingModal } from './components/QuickBookingModal';
 import { Icons } from './components/Icons';
 import LiveTrackingPanel from './components/LiveTrackingPanel';
 import RideRequest from './components/RideRequest';
@@ -403,7 +404,7 @@ const SearchForm: React.FC<{
   );
 };
 
-const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick }) => {
+const RideCard: React.FC<{ ride: Ride, onClick: () => void, onBook: () => void }> = ({ ride, onClick, onBook }) => {
   const departureDate = new Date(ride.departureTime);
   const timeString = departureDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const isGuestRide = ride.isGuest;
@@ -484,12 +485,15 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void }> = ({ ride, onClick
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full font-medium">
+          <span className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full font-medium mr-1">
             {ride.seatsAvailable} place{ride.seatsAvailable > 1 ? 's' : ''}
           </span>
-          <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
-            <Icons.ChevronRight size={18} className="text-gray-400 group-hover:text-emerald-600 transition-colors" />
-          </div>
+          <button 
+            onClick={(e) => { e.stopPropagation(); onBook(); }}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-full shadow-md shadow-emerald-600/10 transition-all hover:scale-105"
+          >
+            Réserver
+          </button>
         </div>
       </div>
     </div>
@@ -1860,6 +1864,46 @@ function AppContent() {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showChatWindow, setShowChatWindow] = useState(false);
   const [chatTarget, setChatTarget] = useState<ChatTarget | null>(null);
+  const [showQuickBookingModal, setShowQuickBookingModal] = useState(false);
+  const [quickBookingRide, setQuickBookingRide] = useState<Ride | null>(null);
+
+  const [incomingBookingRequest, setIncomingBookingRequest] = useState<any>(null);
+
+  const handleQuickBookClick = (ride: Ride) => {
+    setQuickBookingRide(ride);
+    setShowQuickBookingModal(true);
+  };
+
+  const handleQuickBookingSuccess = (conversationId: string, driverId: string, driverName: string, driverAvatar?: string) => {
+    setShowQuickBookingModal(false);
+    setChatTarget({
+      recipientId: driverId,
+      recipientName: driverName,
+      recipientAvatar: driverAvatar,
+      rideId: quickBookingRide?.id
+    });
+    setShowChatWindow(true);
+  };
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      messageService.connect();
+
+      const handleIncomingBooking = (data: any) => {
+        console.log("Nouvelle demande de réservation reçue:", data);
+        setIncomingBookingRequest(data);
+        try {
+          const audio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+          audio.play().catch(() => {});
+        } catch(e) {}
+      };
+
+      messageService.onBookingRequested(handleIncomingBooking);
+      return () => {
+        messageService.offBookingRequested(handleIncomingBooking);
+      };
+    }
+  }, [isAuthenticated, user]);
   
   // Transport à la demande (mode Uber)
   const [showRequestRide, setShowRequestRide] = useState(false);
@@ -2164,7 +2208,7 @@ function AppContent() {
                  ) : (
                    <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                      {recentRides.map(ride => (
-                       <RideCard key={ride.id} ride={ride} onClick={() => handleRideClick(ride)} />
+                       <RideCard key={ride.id} ride={ride} onClick={() => handleRideClick(ride)} onBook={() => handleQuickBookClick(ride)} />
                      ))}
                    </div>
                  )}
@@ -2280,7 +2324,7 @@ function AppContent() {
               ) : (
                 <div className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
                   {sortedResults.map(ride => (
-                    <RideCard key={ride.id} ride={ride} onClick={() => handleRideClick(ride)} />
+                    <RideCard key={ride.id} ride={ride} onClick={() => handleRideClick(ride)} onBook={() => handleQuickBookClick(ride)} />
                   ))}
                   {sortedResults.length === 0 && !searchError && (
                     <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200 col-span-full">
@@ -2506,6 +2550,56 @@ function AppContent() {
           driverName={selectedRide.driver.name}
           onSuccess={handleBookingSuccess}
         />
+      )}
+      
+      {quickBookingRide && (
+        <QuickBookingModal
+          isOpen={showQuickBookingModal}
+          onClose={() => setShowQuickBookingModal(false)}
+          rideId={quickBookingRide.id}
+          price={quickBookingRide.price}
+          currency={quickBookingRide.currency}
+          seats={quickBookingRide.seatsAvailable}
+          origin={quickBookingRide.origin}
+          destination={quickBookingRide.destination}
+          departureTime={quickBookingRide.departureTime}
+          driverId={quickBookingRide.driver.id}
+          driverName={quickBookingRide.driver.name}
+          driverAvatar={quickBookingRide.driver.avatarUrl}
+          onSuccess={handleQuickBookingSuccess}
+        />
+      )}
+
+      {incomingBookingRequest && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4 border border-gray-100 animate-slide-up">
+            <span className="text-4xl">🔔</span>
+            <h3 className="text-xl font-bold text-gray-900">Nouvelle demande de réservation</h3>
+            <p className="text-sm text-gray-600">
+              <strong>{incomingBookingRequest.passengerName}</strong> ({incomingBookingRequest.passengerPhone}) souhaite réserver <strong>{incomingBookingRequest.seats} place(s)</strong> pour le trajet <strong>{incomingBookingRequest.originCity} → {incomingBookingRequest.destinationCity}</strong>.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => {
+                  messageService.respondBooking({ bookingId: incomingBookingRequest.bookingId, accepted: true });
+                  setIncomingBookingRequest(null);
+                }}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all shadow-md shadow-emerald-600/10 text-sm active:scale-95"
+              >
+                ✅ Accepter
+              </button>
+              <button
+                onClick={() => {
+                  messageService.respondBooking({ bookingId: incomingBookingRequest.bookingId, accepted: false });
+                  setIncomingBookingRequest(null);
+                }}
+                className="flex-1 py-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-2xl transition-all text-sm active:scale-95"
+              >
+                ❌ Refuser
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {chatTarget && (

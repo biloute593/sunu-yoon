@@ -422,6 +422,191 @@ export const setupSocketHandlers = (io: SocketServer) => {
       }
     });
 
+    // ============ DEMANDE DE RÉSERVATION TEMPS RÉEL ============
+    socket.on('request_booking', async (data: {
+      rideId: string;
+      seats: number;
+      passengerName: string;
+      passengerPhone: string;
+    }) => {
+      try {
+        const { rideId, seats = 1, passengerName, passengerPhone } = data;
+
+        // 1. Trouver le trajet
+        const ride = await prisma.ride.findUnique({
+          where: { id: rideId },
+          include: { driver: true }
+        });
+
+        if (!ride) {
+          socket.emit('booking_error', { message: 'Trajet introuvable' });
+          return;
+        }
+
+        if (ride.status !== 'OPEN') {
+          socket.emit('booking_error', { message: 'Ce trajet n\'est plus disponible' });
+          return;
+        }
+
+        if (ride.availableSeats < seats) {
+          socket.emit('booking_error', { message: `Plus que ${ride.availableSeats} places disponibles` });
+          return;
+        }
+
+        // 2. Créer une réservation PENDING dans la DB
+        const totalPrice = ride.pricePerSeat * seats;
+
+        // Supprimer toute ancienne réservation PENDING pour éviter les conflits uniques
+        await prisma.booking.deleteMany({
+          where: {
+            rideId,
+            passengerId: userId,
+            status: 'PENDING'
+          }
+        });
+
+        const booking = await prisma.booking.create({
+          data: {
+            rideId,
+            passengerId: userId,
+            seats,
+            totalPrice,
+            status: 'PENDING'
+          }
+        });
+
+        // 3. Envoyer la demande au chauffeur
+        io.to(`user_${ride.driverId}`).emit('booking_requested', {
+          bookingId: booking.id,
+          passengerName: passengerName || socket.userName || 'Passager',
+          passengerPhone: passengerPhone,
+          rideId,
+          seats,
+          originCity: ride.originCity,
+          destinationCity: ride.destinationCity
+        });
+
+        logger.info(`Booking request ${booking.id} sent from passenger ${userId} to driver ${ride.driverId}`);
+      } catch (error) {
+        logger.error('Erreur request_booking:', error);
+        socket.emit('booking_error', { message: 'Erreur lors de la demande de réservation' });
+      }
+    });
+
+    // ============ RÉPONSE DU CHAUFFEUR À LA RÉSERVATION ============
+    socket.on('respond_booking', async (data: {
+      bookingId: string;
+      accepted: boolean;
+    }) => {
+      try {
+        const { bookingId, accepted } = data;
+
+        // 1. Trouver la réservation
+        const booking = await prisma.booking.findUnique({
+          where: { id: bookingId },
+          include: {
+            ride: {
+              include: { driver: true }
+            },
+            passenger: true
+          }
+        });
+
+        if (!booking) {
+          socket.emit('error', { message: 'Réservation introuvable' });
+          return;
+        }
+
+        // Vérifier que le chauffeur est bien celui qui répond
+        if (booking.ride.driverId !== userId) {
+          socket.emit('error', { message: 'Action non autorisée' });
+          return;
+        }
+
+        if (accepted) {
+          // A. Accepter la réservation
+          const updatedBooking = await prisma.booking.update({
+            where: { id: bookingId },
+            data: { status: 'CONFIRMED' }
+          });
+
+          // B. Décrémenter les places sur le trajet
+          const remainingSeats = Math.max(0, booking.ride.availableSeats - booking.seats);
+          await prisma.ride.update({
+            where: { id: booking.rideId },
+            data: {
+              availableSeats: remainingSeats,
+              status: remainingSeats <= 0 ? 'FULL' : booking.ride.status
+            }
+          });
+
+          // C. Trouver ou créer une conversation pour ce trajet
+          let conversation = await prisma.conversation.findFirst({
+            where: {
+              rideId: booking.rideId
+            }
+          });
+
+          if (!conversation) {
+            conversation = await prisma.conversation.create({
+              data: {
+                rideId: booking.rideId
+              }
+            });
+          }
+
+          // D. Créer le premier message système automatique du chauffeur au passager
+          const initialMessageText = `Bonjour ! J'ai accepté votre demande de réservation pour le trajet ${booking.ride.originCity} → ${booking.ride.destinationCity}. À bientôt !`;
+          
+          await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              senderId: booking.ride.driverId,
+              receiverId: booking.passengerId,
+              content: initialMessageText
+            }
+          });
+
+          // E. Notifier le passager que le chauffeur a accepté
+          io.to(`user_${booking.passengerId}`).emit('booking_response', {
+            bookingId,
+            status: 'CONFIRMED',
+            conversationId: conversation.id,
+            driverName: booking.ride.driver.name || 'Conducteur',
+            driverPhone: booking.ride.driver.phone || '',
+            driverAvatar: booking.ride.driver.avatarUrl || '',
+            message: 'Le chauffeur a accepté votre course !'
+          });
+
+          // Notifier le chauffeur du succès
+          socket.emit('booking_processed', { bookingId, status: 'CONFIRMED' });
+
+          logger.info(`Booking ${bookingId} CONFIRMED by driver ${userId}`);
+        } else {
+          // A. Refuser la réservation
+          await prisma.booking.update({
+            where: { id: bookingId },
+            data: { status: 'CANCELLED' }
+          });
+
+          // B. Notifier le passager
+          io.to(`user_${booking.passengerId}`).emit('booking_response', {
+            bookingId,
+            status: 'CANCELLED',
+            message: 'Le chauffeur ne prend plus de client sur ce trajet.'
+          });
+
+          // Notifier le chauffeur du succès
+          socket.emit('booking_processed', { bookingId, status: 'CANCELLED' });
+
+          logger.info(`Booking ${bookingId} CANCELLED by driver ${userId}`);
+        }
+      } catch (error) {
+        logger.error('Erreur respond_booking:', error);
+        socket.emit('error', { message: 'Erreur lors du traitement de la réservation' });
+      }
+    });
+
     // ============ DÉCONNEXION ============
     socket.on('disconnect', () => {
       logger.info(`🔌 Utilisateur déconnecté: ${socket.userName}`);

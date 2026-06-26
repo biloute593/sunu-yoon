@@ -29,6 +29,131 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Media States & Refs
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<number | null>(null);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64Data = reader.result as string;
+          if (conversationId) {
+            setIsSending(true);
+            const mediaContent = JSON.stringify({
+              type: 'audio',
+              url: base64Data,
+              text: '🎙️ Note vocale'
+            });
+            const sentViaSocket = messageService.sendMessage(conversationId, mediaContent);
+            if (!sentViaSocket) {
+              const sent = await messageService.sendMessageREST(conversationId, mediaContent);
+              setMessages(prev => [...prev, sent]);
+            }
+            setIsSending(false);
+          }
+        };
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Erreur acces microphone:', err);
+      alert('Impossible d\'accéder au microphone');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    }
+  };
+
+  const handleAttachmentClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onloadend = async () => {
+      const base64Data = reader.result as string;
+      const fileType = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : null;
+
+      if (!fileType) {
+        alert('Type de fichier non supporté (images et vidéos uniquement)');
+        return;
+      }
+
+      if (conversationId) {
+        setIsSending(true);
+        try {
+          const mediaContent = JSON.stringify({
+            type: fileType,
+            url: base64Data,
+            text: fileType === 'image' ? '📷 Image' : '🎥 Vidéo'
+          });
+          const sentViaSocket = messageService.sendMessage(conversationId, mediaContent);
+          if (!sentViaSocket) {
+            const sent = await messageService.sendMessageREST(conversationId, mediaContent);
+            setMessages(prev => [...prev, sent]);
+          }
+        } catch (error) {
+          console.error(error);
+        } finally {
+          setIsSending(false);
+        }
+      }
+    };
+    e.target.value = '';
+  };
+
+  const formatDuration = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainSecs = secs % 60;
+    return `${mins}:${remainSecs < 10 ? '0' : ''}${remainSecs}`;
+  };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, []);
 
   // Charger ou créer la conversation
   useEffect(() => {
@@ -291,7 +416,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                             : 'bg-white text-gray-900 rounded-bl-md shadow-sm'
                         }`}
                       >
-                        <p className="break-words">{message.content}</p>
+                        {message.mediaType === 'audio' && (
+                          <div className="py-2">
+                            <audio src={message.mediaUrl} controls className="max-w-full rounded" />
+                          </div>
+                        )}
+                        {message.mediaType === 'image' && (
+                          <div className="py-2">
+                            <img src={message.mediaUrl} alt="Image" className="max-w-full max-h-48 rounded object-cover cursor-pointer hover:opacity-90" onClick={() => window.open(message.mediaUrl)} />
+                          </div>
+                        )}
+                        {message.mediaType === 'video' && (
+                          <div className="py-2">
+                            <video src={message.mediaUrl} controls className="max-w-full max-h-48 rounded" />
+                          </div>
+                        )}
+                        {(!message.mediaType || message.mediaType === 'text') && (
+                          <p className="break-words">{message.content}</p>
+                        )}
                         <p className={`text-xs mt-1 ${isOwn ? 'text-emerald-200' : 'text-gray-400'}`}>
                           {formatTime(message.createdAt)}
                           {isOwn && message.isRead && (
@@ -310,24 +452,67 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
         {/* Input */}
         <form onSubmit={handleSend} className="p-4 bg-white border-t border-gray-100">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*,video/*"
+            className="hidden"
+          />
           <div className="flex items-center gap-2">
-            <div className="flex-1 relative">
-              <input
-                ref={inputRef}
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onFocus={handleTypingStart}
-                onBlur={handleTypingStop}
-                placeholder="Votre message..."
-                className="w-full px-4 py-3 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-500 pr-12"
-                disabled={!conversationId || isSending}
-              />
-            </div>
+            {isRecording ? (
+              <div className="flex-1 flex items-center justify-between bg-red-50 text-red-600 px-4 py-3 rounded-full animate-pulse">
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" />
+                  Enregistrement... {formatDuration(recordingTime)}
+                </span>
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  className="text-xs bg-red-600 text-white font-bold px-3 py-1.5 rounded-full hover:bg-red-700 transition-colors"
+                >
+                  Arrêter & Envoyer
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleAttachmentClick}
+                  className="w-12 h-12 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-500 transition-colors"
+                  disabled={!conversationId || isSending}
+                >
+                  <Icons.Paperclip size={20} />
+                </button>
+
+                <div className="flex-1 relative">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onFocus={handleTypingStart}
+                    onBlur={handleTypingStop}
+                    placeholder="Votre message..."
+                    className="w-full px-4 py-3 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    disabled={!conversationId || isSending}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={startRecording}
+                  className="w-12 h-12 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-500 transition-colors"
+                  disabled={!conversationId || isSending}
+                >
+                  <Icons.Mic size={20} />
+                </button>
+              </>
+            )}
             
             <button
               type="submit"
-              disabled={!newMessage.trim() || !conversationId || isSending}
+              disabled={!newMessage.trim() || !conversationId || isSending || isRecording}
               className="w-12 h-12 bg-emerald-600 hover:bg-emerald-700 rounded-full flex items-center justify-center text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSending ? (

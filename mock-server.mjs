@@ -392,6 +392,55 @@ async function handleRequest(req, res) {
     });
   }
 
+  // ─── AUTH: QUICK-LOGIN ───────────────────────────────────────────────────
+  if (path === '/api/auth/quick-login' && method === 'POST') {
+    const body = await parseBody(req);
+    let { phone, name } = body;
+    
+    if (!phone || !name) {
+      return sendJSON(res, 400, { success: false, message: 'Téléphone et nom requis' });
+    }
+    
+    let cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone.startsWith('221')) cleanPhone = `221${cleanPhone}`;
+    const normalizedPhone = `+${cleanPhone}`;
+    
+    let user = usersByPhone.get(normalizedPhone);
+    if (!user) {
+      const id = randomUUID();
+      user = {
+        id,
+        name,
+        firstName: name.split(' ')[0] || name,
+        lastName: name.split(' ').slice(1).join(' ') || '',
+        phone: normalizedPhone,
+        email: '',
+        passwordHash: 'quick_login_secret_123',
+        avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=059669&color=fff`,
+        rating: 5.0,
+        reviewCount: 0,
+        isVerified: true,
+        isPhoneVerified: true,
+        isDriver: false,
+        createdAt: new Date().toISOString()
+      };
+      users.set(id, user);
+      usersByPhone.set(normalizedPhone, user);
+    }
+    
+    const accessToken = makeToken(user.id);
+    const refreshToken = makeToken(user.id);
+    
+    return sendJSON(res, 200, {
+      success: true,
+      data: {
+        user: mapUserToAuthUser(user),
+        tokens: { accessToken, refreshToken },
+        token: accessToken
+      }
+    });
+  }
+
   // ─── AUTH: LOGIN ─────────────────────────────────────────────────────────
   if (path === '/api/auth/login' && method === 'POST') {
     const body = await parseBody(req);

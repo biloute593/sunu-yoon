@@ -13,6 +13,8 @@ export interface Message {
   isRead: boolean;
   createdAt: string;
   sender?: { id: string; name: string; avatarUrl: string };
+  mediaType?: 'text' | 'audio' | 'image' | 'video';
+  mediaUrl?: string;
 }
 
 export interface Conversation {
@@ -196,7 +198,26 @@ const buildLocalConversationId = (currentUserId: string, recipientId: string, ri
   return `local_${rideId || 'general'}_${[currentUserId, recipientId].sort().join('_')}`;
 };
 
-const toMessage = (row: SupabaseMessageRow): Message => ({
+const parseMessageMedia = (message: Message): Message => {
+  try {
+    if (message.content.startsWith('{') && message.content.endsWith('}')) {
+      const parsed = JSON.parse(message.content);
+      if (parsed.type && (parsed.url || parsed.fileUrl)) {
+        return {
+          ...message,
+          mediaType: parsed.type,
+          mediaUrl: parsed.url || parsed.fileUrl,
+          content: parsed.text || ''
+        };
+      }
+    }
+  } catch (e) {
+    // Not JSON
+  }
+  return { ...message, mediaType: 'text' };
+};
+
+const toMessage = (row: SupabaseMessageRow): Message => parseMessageMedia({
   id: row.id,
   conversationId: row.conversation_id,
   senderId: row.sender_id,
@@ -213,7 +234,7 @@ const toMessage = (row: SupabaseMessageRow): Message => ({
     : undefined,
 });
 
-const toBackendMessage = (row: BackendMessageRow): Message => ({
+const toBackendMessage = (row: BackendMessageRow): Message => parseMessageMedia({
   id: row.id,
   conversationId: row.conversationId || row.conversation_id || '',
   senderId: row.senderId || row.sender_id || '',
@@ -601,6 +622,56 @@ export const socketService = {
   offNewMessage: (cb: MessageCallback) => messageListeners.delete(cb),
   onTyping: (cb: TypingCallback) => typingListeners.add(cb),
   offTyping: (cb: TypingCallback) => typingListeners.delete(cb),
+
+  // === Booking Events (proper API, no more .socket hacks) ===
+  getSocket: (): Socket | null => {
+    if (isBackendMode()) {
+      connectBackendSocket();
+    }
+    return socket;
+  },
+
+  requestBooking: (data: { rideId: string; seats: number; passengerName: string; passengerPhone: string }) => {
+    if (isBackendMode()) {
+      connectBackendSocket();
+    }
+    if (socket?.connected) {
+      socket.emit('request_booking', data);
+      return true;
+    }
+    return false;
+  },
+
+  respondBooking: (data: { bookingId: string; accepted: boolean }) => {
+    if (socket?.connected) {
+      socket.emit('respond_booking', data);
+      return true;
+    }
+    return false;
+  },
+
+  onBookingResponse: (cb: (data: any) => void) => {
+    if (isBackendMode()) { connectBackendSocket(); }
+    if (socket) { socket.on('booking_response', cb); }
+  },
+  offBookingResponse: (cb: (data: any) => void) => {
+    if (socket) { socket.off('booking_response', cb); }
+  },
+
+  onBookingError: (cb: (data: any) => void) => {
+    if (socket) { socket.on('booking_error', cb); }
+  },
+  offBookingError: (cb: (data: any) => void) => {
+    if (socket) { socket.off('booking_error', cb); }
+  },
+
+  onBookingRequested: (cb: (data: any) => void) => {
+    if (isBackendMode()) { connectBackendSocket(); }
+    if (socket) { socket.on('booking_requested', cb); }
+  },
+  offBookingRequested: (cb: (data: any) => void) => {
+    if (socket) { socket.off('booking_requested', cb); }
+  },
 };
 
 export const messageService = {
@@ -645,6 +716,17 @@ export const messageService = {
   offNewMessage: (cb: MessageCallback) => messageListeners.delete(cb),
   onTyping: (cb: TypingCallback) => typingListeners.add(cb),
   offTyping: (cb: TypingCallback) => typingListeners.delete(cb),
+
+  // Booking events (proxy to socketService)
+  getSocket: () => socketService.getSocket(),
+  requestBooking: (data: { rideId: string; seats: number; passengerName: string; passengerPhone: string }) => socketService.requestBooking(data),
+  respondBooking: (data: { bookingId: string; accepted: boolean }) => socketService.respondBooking(data),
+  onBookingResponse: (cb: (data: any) => void) => socketService.onBookingResponse(cb),
+  offBookingResponse: (cb: (data: any) => void) => socketService.offBookingResponse(cb),
+  onBookingError: (cb: (data: any) => void) => socketService.onBookingError(cb),
+  offBookingError: (cb: (data: any) => void) => socketService.offBookingError(cb),
+  onBookingRequested: (cb: (data: any) => void) => socketService.onBookingRequested(cb),
+  offBookingRequested: (cb: (data: any) => void) => socketService.offBookingRequested(cb),
 
   async createConversation(recipientId: string, rideId: string, seed?: ConversationSeed): Promise<Conversation> {
     const currentUser = getCurrentUser();
