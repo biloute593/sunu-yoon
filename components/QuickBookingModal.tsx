@@ -111,15 +111,12 @@ export const QuickBookingModal: React.FC<QuickBookingModalProps> = ({
 
     } catch (err: any) {
       console.error('Erreur réservation:', err);
-      // Même en cas d'erreur, essayer d'ouvrir le chat en mode local
-      const name = passengerName.trim() || 'Passager';
-      const autoMessage = `📋 ${name} a réservé ce trajet ${origin} → ${destination}.\n\nSi vous acceptez, appuyez sur OUI. Sinon, appuyez sur NON.`;
-      onSuccess(driverId, driverName, driverAvatar, autoMessage);
-      onClose();
-    } finally {
+      setErrorMessage(err.message || 'Une erreur est survenue lors de la connexion au serveur. Veuillez réessayer.');
       setIsLoading(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
