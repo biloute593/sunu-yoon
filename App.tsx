@@ -2066,7 +2066,7 @@ function AppContent() {
     if (!selectedRide || selectedRide.isGuest) {
       return;
     }
-    setShowBookingModal(true);
+    handleQuickBookClick(selectedRide);
   };
 
   const handlePublishRide = (apiRide: ApiRide) => {
@@ -2540,21 +2540,7 @@ function AppContent() {
         </div>
       )}
       
-      {selectedRide && !selectedRide.isGuest && (
-        <BookingModal 
-          isOpen={showBookingModal}
-          onClose={() => setShowBookingModal(false)}
-          rideId={selectedRide.id}
-          price={selectedRide.price}
-          currency={selectedRide.currency}
-          seats={selectedRide.seatsAvailable}
-          origin={selectedRide.origin}
-          destination={selectedRide.destination}
-          departureTime={selectedRide.departureTime}
-          driverName={selectedRide.driver.name}
-          onSuccess={handleBookingSuccess}
-        />
-      )}
+
       
       {quickBookingRide && (
         <QuickBookingModal
