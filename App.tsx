@@ -1865,11 +1865,13 @@ function AppContent() {
   const [chatTarget, setChatTarget] = useState<ChatTarget | null>(null);
   const [showQuickBookingModal, setShowQuickBookingModal] = useState(false);
   const [quickBookingRide, setQuickBookingRide] = useState<Ride | null>(null);
+  const [quickBookingMode, setQuickBookingMode] = useState<'booking' | 'chat'>('booking');
 
   const [incomingBookingRequest, setIncomingBookingRequest] = useState<any>(null);
 
-  const handleQuickBookClick = (ride: Ride) => {
+  const handleQuickBookClick = (ride: Ride, mode: 'booking' | 'chat' = 'booking') => {
     setQuickBookingRide(ride);
+    setQuickBookingMode(mode);
     setShowQuickBookingModal(true);
   };
 
@@ -2359,7 +2361,7 @@ function AppContent() {
             onBook={initiateBooking}
             onChat={() => {
               if (!isAuthenticated) {
-                setShowAuthModal(true);
+                handleQuickBookClick(selectedRide, 'chat');
               } else {
                 setChatTarget({
                   recipientId: selectedRide.driver.id,
@@ -2539,7 +2541,7 @@ function AppContent() {
       
 
       
-      {quickBookingRide && (
+      {showQuickBookingModal && quickBookingRide && (
         <QuickBookingModal
           isOpen={showQuickBookingModal}
           onClose={() => setShowQuickBookingModal(false)}
@@ -2554,6 +2556,7 @@ function AppContent() {
           driverName={quickBookingRide.driver.name}
           driverAvatar={quickBookingRide.driver.avatarUrl}
           onSuccess={handleQuickBookingSuccess}
+          mode={quickBookingMode}
         />
       )}
 

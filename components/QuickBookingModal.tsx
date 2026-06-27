@@ -17,6 +17,7 @@ interface QuickBookingModalProps {
   driverName: string;
   driverAvatar?: string;
   onSuccess: (driverId: string, driverName: string, driverAvatar?: string, autoMessage?: string) => void;
+  mode?: 'booking' | 'chat';
 }
 
 export const QuickBookingModal: React.FC<QuickBookingModalProps> = ({
@@ -32,7 +33,8 @@ export const QuickBookingModal: React.FC<QuickBookingModalProps> = ({
   driverId,
   driverName,
   driverAvatar,
-  onSuccess
+  onSuccess,
+  mode = 'booking'
 }) => {
   const { user } = useAuth();
   const [passengerName, setPassengerName] = useState('');
@@ -103,7 +105,9 @@ export const QuickBookingModal: React.FC<QuickBookingModalProps> = ({
       }
 
       // Créer le message automatique de réservation
-      const autoMessage = `📋 ${name} a réservé ce trajet ${origin} → ${destination} (${formatDate(departureTime)}).\n\nSi vous acceptez, appuyez sur OUI. Sinon, appuyez sur NON.`;
+      const autoMessage = mode === 'booking' 
+        ? `📋 ${name} a réservé ce trajet ${origin} → ${destination} (${formatDate(departureTime)}).\n\nSi vous acceptez, appuyez sur OUI. Sinon, appuyez sur NON.`
+        : `👋 Bonjour, je suis intéressé par votre trajet ${origin} → ${destination}.`;
 
       // Ouvrir directement le chat avec le chauffeur
       onSuccess(driverId, driverName, driverAvatar, autoMessage);
@@ -130,8 +134,10 @@ export const QuickBookingModal: React.FC<QuickBookingModalProps> = ({
         <div className="space-y-5">
           {/* Header */}
           <div className="text-center">
-            <span className="text-3xl">🚖</span>
-            <h3 className="text-xl font-bold text-gray-900 mt-2">Réserver ce trajet</h3>
+            <span className="text-3xl">{mode === 'booking' ? '🚖' : '💬'}</span>
+            <h3 className="text-xl font-bold text-gray-900 mt-2">
+              {mode === 'booking' ? 'Réserver ce trajet' : 'Contacter le conducteur'}
+            </h3>
           </div>
 
           {/* Résumé du trajet */}
@@ -202,9 +208,15 @@ export const QuickBookingModal: React.FC<QuickBookingModalProps> = ({
             className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 text-base active:scale-95"
           >
             {isLoading ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                <span>Validation...</span>
+              </div>
             ) : (
-              <>✅ Valider</>
+              <>
+                <Icons.Check size={20} />
+                <span>{mode === 'booking' ? 'Valider' : 'Démarrer le chat'}</span>
+              </>
             )}
           </button>
 
