@@ -70,6 +70,7 @@ interface ChatTarget {
   recipientName: string;
   recipientAvatar?: string;
   rideId?: string;
+  autoMessage?: string;
 }
 
 // Convertir les données de l'API vers le format frontend
@@ -1874,13 +1875,16 @@ function AppContent() {
     setShowQuickBookingModal(true);
   };
 
-  const handleQuickBookingSuccess = (conversationId: string, driverId: string, driverName: string, driverAvatar?: string) => {
+  const handleQuickBookingSuccess = (driverId: string, driverName: string, driverAvatar?: string, autoMessage?: string) => {
     setShowQuickBookingModal(false);
+    // Force reload user from localStorage (may have been updated by quick-login)
+    window.dispatchEvent(new Event('storage'));
     setChatTarget({
       recipientId: driverId,
       recipientName: driverName,
       recipientAvatar: driverAvatar,
-      rideId: quickBookingRide?.id
+      rideId: quickBookingRide?.id,
+      autoMessage
     });
     setShowChatWindow(true);
   };
@@ -2605,11 +2609,12 @@ function AppContent() {
       {chatTarget && (
         <ChatWindow
           isOpen={showChatWindow}
-          onClose={() => setShowChatWindow(false)}
+          onClose={() => { setShowChatWindow(false); setChatTarget(null); }}
           recipientId={chatTarget.recipientId}
           recipientName={chatTarget.recipientName}
           recipientAvatar={chatTarget.recipientAvatar}
           rideId={chatTarget.rideId}
+          initialMessage={chatTarget.autoMessage}
         />
       )}
     </Layout>

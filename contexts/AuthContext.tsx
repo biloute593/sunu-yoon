@@ -69,6 +69,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth();
   }, []);
 
+  // Écouter les changements de localStorage (ex: quick-login depuis un autre composant)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const storedUser = authService.getCurrentUser();
+      if (storedUser && authService.isAuthenticated()) {
+        setUser(storedUser);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   const login = useCallback(async (credentials: LoginCredentials) => {
     try {
       setIsLoading(true);

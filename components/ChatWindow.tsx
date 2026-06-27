@@ -10,6 +10,7 @@ interface ChatWindowProps {
   recipientName: string;
   recipientAvatar?: string;
   rideId?: string;
+  initialMessage?: string;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -18,7 +19,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   recipientId,
   recipientName,
   recipientAvatar,
-  rideId
+  rideId,
+  initialMessage
 }) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -29,6 +31,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const initialMessageSentRef = useRef(false);
   
   // Media States & Refs
   const [isRecording, setIsRecording] = useState(false);
@@ -157,7 +160,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Charger ou créer la conversation
   useEffect(() => {
-    if (!isOpen || !user) return;
+    if (!isOpen) return;
+    
+    // Récupérer l'utilisateur depuis localStorage si pas encore chargé via context
+    const currentUser = user || (() => {
+      try {
+        const raw = JSON.parse(localStorage.getItem('sunu_yoon_user') || 'null');
+        return raw;
+      } catch { return null; }
+    })();
+    
+    if (!currentUser) return;
 
     const initChat = async () => {
       setIsLoading(true);
@@ -198,6 +211,38 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
     initChat();
   }, [isOpen, user, recipientId, recipientName, recipientAvatar, rideId]);
+
+  // Auto-envoyer le message initial (réservation) une seule fois
+  useEffect(() => {
+    if (!conversationId || !initialMessage || initialMessageSentRef.current || isLoading) return;
+    
+    initialMessageSentRef.current = true;
+    
+    const sendAutoMessage = async () => {
+      try {
+        const sentViaSocket = messageService.sendMessage(conversationId, initialMessage);
+        if (!sentViaSocket) {
+          const sent = await messageService.sendMessageREST(conversationId, initialMessage);
+          setMessages(prev => [...prev, sent]);
+        }
+      } catch (err) {
+        console.error('Erreur envoi message auto:', err);
+        // Ajouter le message en local même si l'envoi échoue
+        const localMsg: Message = {
+          id: `local_${Date.now()}`,
+          conversationId,
+          senderId: user?.id || 'me',
+          receiverId: recipientId,
+          content: initialMessage,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, localMsg]);
+      }
+    };
+    
+    sendAutoMessage();
+  }, [conversationId, initialMessage, isLoading]);
 
   // Initialiser WebSocket
   useEffect(() => {
