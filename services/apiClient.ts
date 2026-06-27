@@ -1,7 +1,7 @@
 // Configuration de l'API
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const API_ROOT_URL = API_BASE_URL.replace(/\/api$/, '');
-const API_TIMEOUT = 30000; // 30 secondes
+const API_TIMEOUT = 60000; // 60 secondes (sauvegarde pour le réveil du serveur)
 
 // Warm-up : réveille le serveur dès le chargement de l'app
 const HEALTH_URL = API_ROOT_URL + '/health';
