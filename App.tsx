@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import CookieBanner from './components/CookieBanner';
 import AuthModal from './components/AuthModal';
-import BookingModal from './components/BookingModal';
 import ChatWindow from './components/ChatWindow';
 import { QuickBookingModal } from './components/QuickBookingModal';
 import { Icons } from './components/Icons';
@@ -1862,7 +1861,6 @@ function AppContent() {
   
   // Modals
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showBookingModal, setShowBookingModal] = useState(false);
   const [showChatWindow, setShowChatWindow] = useState(false);
   const [chatTarget, setChatTarget] = useState<ChatTarget | null>(null);
   const [showQuickBookingModal, setShowQuickBookingModal] = useState(false);
@@ -2089,7 +2087,6 @@ function AppContent() {
 
   const handleBookingSuccess = (bookingId: string) => {
     console.log('Réservation réussie:', bookingId);
-    setShowBookingModal(false);
     setProfileRefreshKey(prev => prev + 1);
     setCurrentView('profile');
   };
