@@ -361,7 +361,7 @@ router.post('/:id/confirm', async (req: AuthRequest, res, next) => {
       driverId: userId,
       driverName: req.user!.name || 'Conducteur',
       driverPhone: req.user!.phone || '',
-      driverAvatar: req.user!.avatarUrl || ''
+      driverAvatar: ''
     });
 
     res.json({
