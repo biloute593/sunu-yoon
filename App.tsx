@@ -405,12 +405,22 @@ const SearchForm: React.FC<{
 };
 
 const RideCard: React.FC<{ ride: Ride, onClick: () => void, onBook: () => void }> = ({ ride, onClick, onBook }) => {
-  const departureDate = new Date(ride.departureTime);
-  const timeString = departureDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  const isGuestRide = ride.isGuest;
-  const driverRating = typeof ride.driver.rating === 'number' ? ride.driver.rating : null;
+  const driver = ride.driver || { name: 'Conducteur', avatarUrl: '', rating: 4.8, reviewCount: 0, isVerified: false };
+  const departureDate = ride.departureTime ? new Date(ride.departureTime) : new Date();
+  let timeString = '--:--';
+  try {
+    if (!isNaN(departureDate.getTime())) {
+      timeString = departureDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+  } catch (e) {
+    console.error('Error formatting time in RideCard:', e);
+  }
+  const isGuestRide = !!ride.isGuest;
+  const driverRating = typeof driver.rating === 'number' ? driver.rating : null;
   const ratingLabel = isGuestRide ? 'Nouveau' : driverRating ? driverRating.toFixed(1) : 'N/A';
-  const reviewLabel = isGuestRide ? 'Invité' : `(${ride.driver.reviewCount})`;
+  const reviewLabel = isGuestRide ? 'Invité' : `(${driver.reviewCount || 0})`;
+  const priceDisplay = typeof ride.price === 'number' ? ride.price.toLocaleString('fr-FR') : '0';
+  const features = ride.features || [];
 
   return (
     <div 
@@ -439,7 +449,7 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void, onBook: () => void }
         </div>
         <div className="text-right">
           <span className="block text-2xl font-bold text-emerald-600">
-            {ride.price.toLocaleString('fr-FR')}
+            {priceDisplay}
           </span>
           <span className="text-xs text-gray-400">{ride.currency}</span>
           {isGuestRide && (
@@ -451,9 +461,9 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void, onBook: () => void }
       </div>
 
       {/* Features tags */}
-      {ride.features.length > 0 && (
+      {features.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-5">
-          {ride.features.slice(0, 3).map(f => (
+          {features.slice(0, 3).map(f => (
             <span key={f} className="text-xs px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full">
               {f === 'Climatisation' ? '❄️' : f === 'Musique' ? '🎵' : f === 'Bagages acceptés' ? '🧳' : f === 'Non-fumeur' ? '🚭' : '✓'} {f}
             </span>
@@ -465,18 +475,18 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void, onBook: () => void }
         <div className="flex items-center gap-4">
           <div className="relative">
             <img 
-              src={ride.driver.avatarUrl} 
-              alt={ride.driver.name} 
+              src={driver.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(driver.name || 'C')}&background=10b981&color=fff`} 
+              alt={driver.name} 
               className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm"
             />
-            {ride.driver.isVerified && (
+            {driver.isVerified && (
               <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm">
                 <Icons.CheckCircle size={14} className="text-blue-500 fill-blue-100" />
               </div>
             )}
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-gray-900">{ride.driver.name}</h4>
+            <h4 className="text-sm font-semibold text-gray-900">{driver.name}</h4>
             <div className="flex items-center gap-1 text-xs text-gray-500">
               <Icons.Star size={12} className="text-yellow-400 fill-yellow-400" />
               <span className="font-medium text-gray-700">{ratingLabel}</span>
@@ -506,24 +516,63 @@ const RideDetails: React.FC<{
   onBook: () => void,
   onChat: () => void
 }> = ({ ride, onBack, onBook, onChat }) => {
-  const departureDate = new Date(ride.departureTime);
-  const formattedDate = departureDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  const formattedTime = departureDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const driver = ride.driver || { id: '', name: 'Conducteur', avatarUrl: '', rating: 4.8, reviewCount: 0, isVerified: false };
+  
+  // Safe date parsing with Safari/cross-browser support
+  const parseSafeDate = (dateStr: any): Date => {
+    if (!dateStr) return new Date();
+    let d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d;
+    try {
+      // Handle YYYY-MM-DD HH:mm -> YYYY-MM-DDTHH:mm format
+      const formatted = String(dateStr).replace(' ', 'T');
+      d = new Date(formatted);
+      if (!isNaN(d.getTime())) return d;
+    } catch {}
+    return new Date();
+  };
+
+  const departureDate = parseSafeDate(ride.departureTime);
+  
+  let formattedDate = 'Date inconnue';
+  let formattedTime = '--:--';
+  try {
+    if (!isNaN(departureDate.getTime())) {
+      formattedDate = departureDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+      formattedTime = departureDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+  } catch (e) {
+    console.error('Error formatting date in RideDetails:', e);
+    formattedDate = String(ride.departureTime || 'Date inconnue');
+  }
+
   const effectiveDurationMinutes = ride.estimatedDuration && ride.estimatedDuration > 0
     ? ride.estimatedDuration
     : parseDurationToMinutes(ride.duration) ?? 180;
-  const arrivalDate = new Date(departureDate.getTime() + effectiveDurationMinutes * 60000);
-  const arrivalTime = arrivalDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  const isGuestRide = ride.isGuest;
+    
+  const arrivalDate = isNaN(departureDate.getTime())
+    ? new Date()
+    : new Date(departureDate.getTime() + effectiveDurationMinutes * 60000);
+    
+  let arrivalTime = '--:--';
+  try {
+    if (!isNaN(arrivalDate.getTime())) {
+      arrivalTime = arrivalDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+  } catch (e) {
+    console.error('Error formatting arrival time in RideDetails:', e);
+  }
+
+  const isGuestRide = !!ride.isGuest;
   const contact = ride.driverContact;
-  const driverRating = typeof ride.driver.rating === 'number' ? ride.driver.rating : null;
+  const driverRating = typeof driver.rating === 'number' ? driver.rating : null;
   const ratingDisplay = isGuestRide
     ? 'Nouveau'
     : driverRating
       ? `${driverRating.toFixed(1)}/5`
       : 'N/A';
-  const reviewLabel = !isGuestRide && ride.driver.reviewCount > 0
-    ? `${ride.driver.reviewCount} avis`
+  const reviewLabel = !isGuestRide && driver.reviewCount > 0
+    ? `${driver.reviewCount} avis`
     : isGuestRide
       ? 'Annonce invitée'
       : 'Aucun avis';
@@ -538,6 +587,9 @@ const RideDetails: React.FC<{
     'Prise USB': '🔌',
     'Silence préféré': '🤫'
   };
+
+  const priceDisplay = typeof ride.price === 'number' ? ride.price.toLocaleString('fr-FR') : '0';
+  const features = ride.features || [];
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 animate-fade-in">
@@ -559,8 +611,8 @@ const RideDetails: React.FC<{
           </h1>
         </div>
         <div className="text-right">
-          <div className="text-3xl font-bold text-emerald-600">{ride.price.toLocaleString('fr-FR')}</div>
-          <div className="text-sm text-gray-500">{ride.currency} / place</div>
+          <div className="text-3xl font-bold text-emerald-600">{priceDisplay}</div>
+          <div className="text-sm text-gray-500">{ride.currency || 'XOF'} / place</div>
         </div>
       </div>
 
@@ -632,22 +684,22 @@ const RideDetails: React.FC<{
         <div className="flex items-start justify-between">
           <div className="flex gap-4">
             <div className="relative">
-              <img src={ride.driver.avatarUrl} alt={ride.driver.name} className="w-20 h-20 rounded-full object-cover ring-4 ring-gray-100" />
-              {ride.driver.isVerified && (
+              <img src={driver.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(driver.name || 'C')}&background=059669&color=fff`} alt={driver.name} className="w-20 h-20 rounded-full object-cover ring-4 ring-gray-100" />
+              {driver.isVerified && (
                 <div className="absolute -bottom-1 -right-1 bg-emerald-500 text-white p-1.5 rounded-full border-2 border-white">
                   <Icons.CheckCircle size={12} />
                 </div>
               )}
             </div>
             <div>
-              <h4 className="text-xl font-bold text-gray-900">{ride.driver.name}</h4>
+              <h4 className="text-xl font-bold text-gray-900">{driver.name}</h4>
               <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
                 <Icons.Star size={16} className="text-yellow-400 fill-yellow-400" />
                 <span className="font-medium">{ratingDisplay}</span>
                 <span className="text-gray-300">•</span>
                 <span>{reviewLabel}</span>
               </div>
-              {ride.driver.isVerified && !isGuestRide && (
+              {driver.isVerified && !isGuestRide && (
                 <div className="flex items-center gap-1 text-sm text-emerald-600 mt-2 font-medium">
                   <Icons.Shield size={14} />
                   Profil vérifié
@@ -701,14 +753,14 @@ const RideDetails: React.FC<{
       </div>
 
       {/* Options du trajet */}
-      {ride.features.length > 0 && (
+      {features.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
             <Icons.CheckCircle size={20} className="text-emerald-500" />
             Ce trajet inclut
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {ride.features.map(f => (
+            {features.map(f => (
               <div key={f} className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg text-sm font-medium">
                 <span>{featureEmojis[f] || '✓'}</span>
                 {f}
@@ -750,7 +802,7 @@ const RideDetails: React.FC<{
               className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-bold rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all text-lg flex items-center justify-center gap-2"
             >
               <Icons.CheckCircle size={20} />
-              Réserver pour {ride.price.toLocaleString('fr-FR')} {ride.currency}
+              Réserver pour {priceDisplay} {ride.currency || 'XOF'}
             </button>
             <p className="text-center text-xs text-gray-400 mt-3 flex items-center justify-center gap-2">
               <Icons.Shield size={12} />

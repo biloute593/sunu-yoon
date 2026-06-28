@@ -97,15 +97,15 @@ router.post('/',
       });
 
       // Notifier le conducteur via WebSocket
-      io.to(`user_${ride.driverId}`).emit('new_booking', {
+      io.to(`user_${ride.driverId}`).emit('booking_requested', {
         bookingId: booking.id,
-        passenger: booking.passenger,
+        passengerId: userId,
+        passengerName: booking.passenger.name || 'Passager',
+        passengerPhone: booking.passenger.phone || '',
         seats,
-        ride: {
-          origin: ride.originCity,
-          destination: ride.destinationCity,
-          departureTime: ride.departureTime
-        }
+        originCity: ride.originCity,
+        destinationCity: ride.destinationCity,
+        departureTime: ride.departureTime
       });
 
       // Créer une notification pour le conducteur
@@ -355,6 +355,14 @@ router.post('/:id/confirm', async (req: AuthRequest, res, next) => {
 
     // WebSocket
     io.to(`user_${booking.passengerId}`).emit('booking_confirmed', { bookingId: id });
+    io.to(`user_${booking.passengerId}`).emit('booking_response', {
+      bookingId: id,
+      accepted: true,
+      driverId: userId,
+      driverName: req.user!.name || 'Conducteur',
+      driverPhone: req.user!.phone || '',
+      driverAvatar: req.user!.avatarUrl || ''
+    });
 
     res.json({
       success: true,

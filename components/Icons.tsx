@@ -31,7 +31,8 @@ import {
   Phone,
   Home,
   Mic,
-  Paperclip
+  Paperclip,
+  Check
 } from 'lucide-react';
 
 export const Icons = {
@@ -66,5 +67,6 @@ export const Icons = {
   Phone,
   Home,
   Mic,
-  Paperclip
+  Paperclip,
+  Check
 };

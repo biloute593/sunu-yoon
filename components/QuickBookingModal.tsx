@@ -104,6 +104,25 @@ export const QuickBookingModal: React.FC<QuickBookingModalProps> = ({
         }
       }
 
+      // Si connecté au backend, créer la réservation obligatoirement pour pouvoir chatter
+      const isBackend = localStorage.getItem('sunu_yoon_auth_provider') === 'backend' || !!localStorage.getItem('sunu_yoon_access_token');
+      if (isBackend) {
+        const bookRes = await ApiClient.post<{ booking: { id: string } }>('/bookings', {
+          rideId,
+          seats: 1
+        });
+
+        if (!bookRes.success) {
+          const isAlreadyBooked = bookRes.error?.message?.toLowerCase().includes('déjà') ||
+                                  bookRes.error?.message?.toLowerCase().includes('already') ||
+                                  bookRes.message?.toLowerCase().includes('déjà') ||
+                                  bookRes.message?.toLowerCase().includes('already');
+          if (!isAlreadyBooked) {
+            throw new Error(bookRes.error?.message || bookRes.message || 'Impossible de créer la réservation.');
+          }
+        }
+      }
+
       // Créer le message automatique de réservation
       const autoMessage = mode === 'booking' 
         ? `📋 ${name} a réservé ce trajet ${origin} → ${destination} (${formatDate(departureTime)}).\n\nSi vous acceptez, appuyez sur OUI. Sinon, appuyez sur NON.`
