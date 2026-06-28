@@ -384,4 +384,21 @@ router.post('/:id/cancel', authMiddleware, async (req: AuthRequest, res, next) =
   }
 });
 
+// Route de débogage pour voir tous les trajets
+router.get('/debug-all', async (req, res, next) => {
+  try {
+    const rides = await prisma.ride.findMany({
+      include: {
+        driver: {
+          select: { id: true, name: true }
+        }
+      }
+    });
+    const guestRides = await prisma.guestRide.findMany();
+    res.json({ success: true, data: { rides, guestRides } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
