@@ -9,6 +9,54 @@ import { buildCityFilter } from '../utils/senegalGeo';
 
 const router = Router();
 
+// Helper pour s'assurer qu'il y a toujours des trajets de démo dans le futur
+async function ensureFutureRides() {
+  try {
+    const now = new Date();
+    // Compter les trajets de type OPEN qui sont dans le futur
+    const futureCount = await prisma.ride.count({
+      where: {
+        status: 'OPEN',
+        departureTime: { gte: now }
+      }
+    });
+
+    // Si on a moins de 3 trajets dans le futur, on décale les trajets passés dans le futur
+    if (futureCount < 3) {
+      console.log(`[Auto-Seed] Only ${futureCount} future rides found. Shifting past rides to future dates...`);
+      
+      const pastRides = await prisma.ride.findMany({
+        where: {
+          departureTime: { lt: now }
+        }
+      });
+
+      if (pastRides.length > 0) {
+        let index = 1;
+        for (const ride of pastRides) {
+          // Décale les départs de 1 à 5 jours dans le futur
+          const newDeparture = new Date();
+          newDeparture.setDate(newDeparture.getDate() + index);
+          newDeparture.setHours(new Date(ride.departureTime).getHours(), new Date(ride.departureTime).getMinutes(), 0, 0);
+
+          await prisma.ride.update({
+            where: { id: ride.id },
+            data: { 
+              departureTime: newDeparture,
+              status: 'OPEN', // Rétablir le trajet en OPEN s'il était fermé
+              availableSeats: ride.totalSeats // Réinitialiser les places libres pour les tests
+            }
+          });
+          index++;
+        }
+        console.log(`[Auto-Seed] Successfully shifted ${pastRides.length} rides to future dates.`);
+      }
+    }
+  } catch (err) {
+    console.error("[Auto-Seed] Error in ensureFutureRides:", err);
+  }
+}
+
 // ============ RECHERCHER DES TRAJETS (PUBLIC) ============
 router.get('/',
   query('origin').optional().trim(),
@@ -17,6 +65,7 @@ router.get('/',
   query('seats').optional().isInt({ min: 1 }).withMessage('Nombre de places invalide'),
   async (req, res, next) => {
     try {
+      await ensureFutureRides();
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         throw new AppError(errors.array()[0].msg, 400);
