@@ -189,13 +189,13 @@ class RideService {
     if (params.date?.trim()) searchParams.set('date', params.date.trim());
     if (params.seats) searchParams.set('seats', params.seats.toString());
 
-    const response = await fetch(`${API_BASE_URL}/rides${searchParams.toString() ? `?${searchParams.toString()}` : ''}`);
-    if (!response.ok) {
+    const suffix = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    const response = await ApiClient.get<{ rides: any[] }>(`/rides${suffix}`);
+    if (!response.success || !response.data?.rides) {
       throw new Error('Impossible de charger les trajets depuis le backend.');
     }
 
-    const payload = await response.json();
-    return (payload?.data?.rides || []).map((ride: any) => this._backendToRide(ride));
+    return response.data.rides.map((ride: any) => this._backendToRide(ride));
   }
 
   // ── Convertisseur DB→Ride ──────────────────────────────────────────────────
@@ -296,12 +296,9 @@ class RideService {
   async getRide(id: string): Promise<Ride | null> {
     if (BACKEND_ENABLED) {
       try {
-        const response = await fetch(`${API_BASE_URL}/rides/${id}`);
-        if (response.ok) {
-          const payload = await response.json();
-          if (payload?.data?.ride) {
-            return this._backendToRide(payload.data.ride);
-          }
+        const response = await ApiClient.get<{ ride: any }>(`/rides/${id}`);
+        if (response.success && response.data?.ride) {
+          return this._backendToRide(response.data.ride);
         }
       } catch {
         // Fallback Supabase/local

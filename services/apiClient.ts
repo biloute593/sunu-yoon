@@ -113,7 +113,7 @@ class ApiClient {
     }
 
     try {
-      let response = await fetch(url, { ...options, headers });
+      let response = await fetchWithTimeout(url, { ...options, headers });
 
       // Si 401, essayer de rafraîchir le token
       if (response.status === 401 && token) {
@@ -121,7 +121,7 @@ class ApiClient {
         if (refreshed) {
           const newToken = TokenManager.getAccessToken();
           (headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
-          response = await fetch(url, { ...options, headers });
+          response = await fetchWithTimeout(url, { ...options, headers });
         }
       }
 
