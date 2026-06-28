@@ -1921,6 +1921,70 @@ function AppContent() {
 
   const [incomingBookingRequest, setIncomingBookingRequest] = useState<any>(null);
 
+  // Synchroniser l'historique du navigateur avec les états de navigation
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state && event.state.view) {
+        setCurrentView(event.state.view);
+        if (event.state.selectedRide !== undefined) {
+          setSelectedRide(event.state.selectedRide);
+        }
+        if (event.state.searchResults !== undefined) {
+          setSearchResults(event.state.searchResults);
+        }
+      } else {
+        setCurrentView('home');
+        setSelectedRide(null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    
+    // Initialiser l'état initial
+    window.history.replaceState({ 
+      view: currentView, 
+      selectedRide, 
+      searchResults 
+    }, '', '');
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  // Dès que currentView (ou les données clés) change, on met à jour l'historique
+  useEffect(() => {
+    if (window.history.state?.view !== currentView) {
+      window.history.pushState({ 
+        view: currentView, 
+        selectedRide, 
+        searchResults 
+      }, '', '');
+    } else {
+      window.history.replaceState({ 
+        view: currentView, 
+        selectedRide, 
+        searchResults 
+      }, '', '');
+    }
+  }, [currentView, selectedRide, searchResults]);
+
+  // Keep-alive ping du backend toutes les 10 minutes si l'application est ouverte
+  useEffect(() => {
+    const HEALTH_URL = import.meta.env.VITE_API_URL 
+      ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') + '/health' 
+      : 'https://sunu-yoon-backend.onrender.com/health';
+
+    const pingBackend = () => {
+      fetch(HEALTH_URL).catch(() => {});
+    };
+
+    pingBackend();
+    const interval = setInterval(pingBackend, 10 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const handleQuickBookClick = (ride: Ride, mode: 'booking' | 'chat' = 'booking') => {
     setQuickBookingRide(ride);
     setQuickBookingMode(mode);

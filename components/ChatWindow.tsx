@@ -23,6 +23,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   initialMessage
 }) => {
   const { user } = useAuth();
+  const currentUserId = user?.id || (() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('sunu_yoon_user') || 'null');
+      return raw?.id || 'me';
+    } catch { return 'me'; }
+  })();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -231,7 +237,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         const localMsg: Message = {
           id: `local_${Date.now()}`,
           conversationId,
-          senderId: user?.id || 'me',
+          senderId: currentUserId || 'me',
           receiverId: recipientId,
           content: initialMessage,
           isRead: false,
@@ -257,7 +263,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       if (message.conversationId === conversationId) {
         setMessages(prev => [...prev, message]);
         // Marquer comme lu si c'est un message reçu
-        if (message.senderId !== user?.id) {
+        if (message.senderId !== currentUserId) {
           messageService.markAsRead(conversationId);
         }
       }
@@ -278,7 +284,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       messageService.offNewMessage(handleNewMessage);
       messageService.offTyping(handleTyping);
     };
-  }, [isOpen, conversationId, user?.id, recipientId]);
+  }, [isOpen, conversationId, currentUserId, recipientId]);
 
   // Scroll automatique vers le bas
   useEffect(() => {
@@ -433,7 +439,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
                 {/* Messages du jour */}
                 {msgs.map((message, index) => {
-                  const isOwn = message.senderId === user?.id;
+                  const isOwn = message.senderId === currentUserId;
                   const showAvatar = !isOwn && (index === 0 || msgs[index - 1].senderId !== message.senderId);
 
                   return (

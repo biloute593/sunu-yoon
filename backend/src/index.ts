@@ -153,7 +153,7 @@ if (!process.env.VERCEL) {
     logger.info(`📡 WebSocket prêt pour les connexions`);
 
     // Self-ping : empêche Render de mettre le serveur en veille
-    if (process.env.NODE_ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
+    if (process.env.RENDER_EXTERNAL_URL) {
       const SELF_PING_INTERVAL = 10 * 60 * 1000; // 10 minutes
       setInterval(async () => {
         try {
