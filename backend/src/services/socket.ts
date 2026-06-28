@@ -3,12 +3,25 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../index';
 import { logger } from '../utils/logger';
 
+let ioInstance: SocketServer | null = null;
+
+export const isUserOnline = (userId: string): boolean => {
+  if (!ioInstance) return false;
+  try {
+    const room = ioInstance.sockets.adapter.rooms.get(`user_${userId}`);
+    return !!room && room.size > 0;
+  } catch {
+    return false;
+  }
+};
+
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   userName?: string;
 }
 
 export const setupSocketHandlers = (io: SocketServer) => {
+  ioInstance = io;
   // Middleware d'authentification
   io.use(async (socket: AuthenticatedSocket, next) => {
     try {
@@ -182,8 +195,13 @@ export const setupSocketHandlers = (io: SocketServer) => {
           data: { updatedAt: new Date() }
         });
 
-        // Envoyer à tous dans la conversation
-        io.to(`conversation_${conversationId}`).emit('new_message', message);
+        // Envoyer à tous dans la conversation avec le statut isReceived
+        const recipientOnline = isUserOnline(receiverId);
+        const payload = {
+          ...message,
+          isReceived: message.isRead || recipientOnline
+        };
+        io.to(`conversation_${conversationId}`).emit('new_message', payload);
 
         // Notifier le destinataire s'il n'est pas dans la conversation
         io.to(`user_${receiverId}`).emit('message_notification', {
@@ -207,6 +225,40 @@ export const setupSocketHandlers = (io: SocketServer) => {
       } catch (error) {
         logger.error('Erreur send_message:', error);
         socket.emit('error', { message: 'Erreur lors de l\'envoi' });
+      }
+    });
+
+    // ============ MESSAGE ÉPHÉMÈRE VU UNIQUE ============
+    socket.on('open_ephemeral_message', async (data: { messageId: string }) => {
+      try {
+        const { messageId } = data;
+        const msg = await prisma.message.findUnique({
+          where: { id: messageId }
+        });
+        
+        if (!msg) return;
+
+        let parsed = JSON.parse(msg.content);
+        if (parsed.viewOnce && !parsed.isOpened) {
+          parsed.isOpened = true;
+          parsed.url = ''; // Sécurité : effacer le contenu base64 définitivement !
+          
+          const updatedMsg = await prisma.message.update({
+            where: { id: messageId },
+            data: { content: JSON.stringify(parsed) },
+            include: {
+              sender: {
+                select: { id: true, name: true, avatarUrl: true }
+              }
+            }
+          });
+
+          // Notifier tous les participants de la conversation
+          io.to(`conversation_${msg.conversationId}`).emit('message_updated', updatedMsg);
+          logger.info(`Message éphémère ${messageId} ouvert par ${socket.userName}`);
+        }
+      } catch (err) {
+        logger.error('Erreur open_ephemeral_message:', err);
       }
     });
 

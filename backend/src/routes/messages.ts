@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { prisma, io } from '../index';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
+import { isUserOnline } from '../services/socket';
 
 const router = Router();
 
@@ -240,10 +241,15 @@ router.get('/conversations/:id/messages', async (req: AuthRequest, res, next) =>
       data: { isRead: true }
     });
 
+    const messagesWithReceived = messages.map(msg => ({
+      ...msg,
+      isReceived: msg.isRead || isUserOnline(msg.receiverId)
+    }));
+
     res.json({
       success: true,
       data: {
-        messages: messages.reverse(),
+        messages: messagesWithReceived.reverse(),
         hasMore: messages.length === parseInt(limit as string)
       }
     });
@@ -288,8 +294,13 @@ router.post('/conversations/:id/messages',
         data: { updatedAt: new Date() }
       });
 
-      // Notifier via WebSocket
-      io.to(`conversation_${id}`).emit('new_message', message);
+      // Notifier via WebSocket avec le statut isReceived
+      const recipientOnline = isUserOnline(receiverId);
+      const payload = {
+        ...message,
+        isReceived: message.isRead || recipientOnline
+      };
+      io.to(`conversation_${id}`).emit('new_message', payload);
       io.to(`user_${receiverId}`).emit('message_notification', {
         conversationId: id,
         senderName: req.user!.name,
@@ -309,7 +320,7 @@ router.post('/conversations/:id/messages',
 
       res.status(201).json({
         success: true,
-        data: { message }
+        data: { message: payload }
       });
     } catch (error) {
       next(error);

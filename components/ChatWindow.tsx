@@ -35,6 +35,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [isEphemeralMode, setIsEphemeralMode] = useState(false);
+  const [activeEphemeralMedia, setActiveEphemeralMedia] = useState<{ type: 'image' | 'video' | 'audio'; url: string; messageId: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const initialMessageSentRef = useRef(false);
@@ -68,17 +70,39 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           const base64Data = reader.result as string;
           if (conversationId) {
             setIsSending(true);
+            const isEphemeral = isEphemeralMode;
+            setIsEphemeralMode(false);
+
             const mediaContent = JSON.stringify({
               type: 'audio',
               url: base64Data,
-              text: '🎙️ Note vocale'
+              text: isEphemeral ? '🎙️ Note vocale éphémère' : '🎙️ Note vocale',
+              viewOnce: isEphemeral ? true : undefined,
+              isOpened: isEphemeral ? false : undefined
             });
-            const sentViaSocket = messageService.sendMessage(conversationId, mediaContent);
-            if (!sentViaSocket) {
-              const sent = await messageService.sendMessageREST(conversationId, mediaContent);
-              setMessages(prev => [...prev, sent]);
+
+            // Instant local render
+            const localMsg: Message = {
+              id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              conversationId,
+              senderId: currentUserId || 'me',
+              receiverId: recipientId,
+              content: mediaContent,
+              isRead: false,
+              createdAt: new Date().toISOString(),
+            };
+            setMessages(prev => [...prev, localMsg]);
+
+            try {
+              const sentViaSocket = messageService.sendMessage(conversationId, mediaContent);
+              if (!sentViaSocket) {
+                await messageService.sendMessageREST(conversationId, mediaContent);
+              }
+            } catch (err) {
+              console.error('Erreur envoi audio:', err);
+            } finally {
+              setIsSending(false);
             }
-            setIsSending(false);
           }
         };
         stream.getTracks().forEach(track => track.stop());
@@ -128,16 +152,35 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
       if (conversationId) {
         setIsSending(true);
+        const isEphemeral = isEphemeralMode;
+        setIsEphemeralMode(false);
+
         try {
           const mediaContent = JSON.stringify({
             type: fileType,
             url: base64Data,
-            text: fileType === 'image' ? '📷 Image' : '🎥 Vidéo'
+            text: fileType === 'image' 
+              ? (isEphemeral ? '📷 Image éphémère' : '📷 Image') 
+              : (isEphemeral ? '🎥 Vidéo éphémère' : '🎥 Vidéo'),
+            viewOnce: isEphemeral ? true : undefined,
+            isOpened: isEphemeral ? false : undefined
           });
+
+          // Instant local render
+          const localMsg: Message = {
+            id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            conversationId,
+            senderId: currentUserId || 'me',
+            receiverId: recipientId,
+            content: mediaContent,
+            isRead: false,
+            createdAt: new Date().toISOString(),
+          };
+          setMessages(prev => [...prev, localMsg]);
+
           const sentViaSocket = messageService.sendMessage(conversationId, mediaContent);
           if (!sentViaSocket) {
-            const sent = await messageService.sendMessageREST(conversationId, mediaContent);
-            setMessages(prev => [...prev, sent]);
+            await messageService.sendMessageREST(conversationId, mediaContent);
           }
         } catch (error) {
           console.error(error);
@@ -261,11 +304,42 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     // Écouter les nouveaux messages
     const handleNewMessage = (message: Message) => {
       if (message.conversationId === conversationId) {
-        setMessages(prev => [...prev, message]);
+        setMessages(prev => {
+          // Si le message a déjà été ajouté en local (même contenu de texte par nous)
+          const isDup = prev.some(m => 
+            m.id === message.id || 
+            (m.senderId === message.senderId && m.content === message.content && m.id.startsWith('local_'))
+          );
+          
+          if (isDup) {
+            return prev.map(m => {
+              if (m.id === message.id || (m.senderId === message.senderId && m.content === message.content && m.id.startsWith('local_'))) {
+                return message;
+              }
+              return m;
+            });
+          }
+          return [...prev, message];
+        });
+
         // Marquer comme lu si c'est un message reçu
         if (message.senderId !== currentUserId) {
           messageService.markAsRead(conversationId);
         }
+      }
+    };
+
+    // Écouter les mises à jour de message (ex: message éphémère ouvert)
+    const handleMessageUpdated = (updatedMsg: Message) => {
+      if (updatedMsg.conversationId === conversationId) {
+        setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
+      }
+    };
+
+    // Écouter les accusés de lecture
+    const handleMessagesRead = (data: { conversationId: string }) => {
+      if (data.conversationId === conversationId) {
+        setMessages(prev => prev.map(m => m.senderId === currentUserId ? { ...m, isRead: true } : m));
       }
     };
 
@@ -277,11 +351,21 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     };
 
     messageService.onNewMessage(handleNewMessage);
+    (messageService as any).onMessageUpdated?.(handleMessageUpdated);
+    // On s'assure d'écouter les accusés de lecture via socket directement si pas de proxy, mais getSocket().on est très fiable
+    const s = messageService.getSocket();
+    if (s) {
+      s.on('messages_read', handleMessagesRead);
+    }
     messageService.onTyping(handleTyping);
 
     return () => {
       messageService.leaveConversation(conversationId);
       messageService.offNewMessage(handleNewMessage);
+      (messageService as any).offMessageUpdated?.(handleMessageUpdated);
+      if (s) {
+        s.off('messages_read', handleMessagesRead);
+      }
       messageService.offTyping(handleTyping);
     };
   }, [isOpen, conversationId, currentUserId, recipientId]);
@@ -306,25 +390,25 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     setNewMessage('');
     setIsSending(true);
 
-    try {
-      // Envoyer via WebSocket (temps réel)
-      const sentViaSocket = messageService.sendMessage(conversationId, messageText);
+    // Créer le message local immédiatement pour un affichage instantané
+    const localMsg: Message = {
+      id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      conversationId,
+      senderId: currentUserId || 'me',
+      receiverId: recipientId,
+      content: messageText,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, localMsg]);
 
-      // Fallback direct si la socket n'est pas connectée
+    try {
+      const sentViaSocket = messageService.sendMessage(conversationId, messageText);
       if (!sentViaSocket) {
-        const sent = await messageService.sendMessageREST(conversationId, messageText);
-        setMessages(prev => [...prev, sent]);
+        await messageService.sendMessageREST(conversationId, messageText);
       }
     } catch (error) {
       console.error('Erreur envoi message:', error);
-      // Fallback: envoyer via API REST
-      try {
-        const sent = await messageService.sendMessageREST(conversationId, messageText);
-        setMessages(prev => [...prev, sent]);
-      } catch (restError) {
-        console.error('Erreur envoi REST:', restError);
-        setNewMessage(messageText); // Restaurer le message
-      }
     } finally {
       setIsSending(false);
     }
@@ -467,28 +551,66 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                             : 'bg-white text-gray-900 rounded-bl-md shadow-sm'
                         }`}
                       >
-                        {message.mediaType === 'audio' && (
-                          <div className="py-2">
-                            <audio src={message.mediaUrl} controls className="max-w-full rounded" />
+                        {message.viewOnce ? (
+                          <div className="py-1">
+                            {message.isOpened ? (
+                              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm select-none ${isOwn ? 'bg-emerald-700 text-emerald-200' : 'bg-gray-100 text-gray-400 border border-gray-200'}`}>
+                                <Icons.Lock size={16} />
+                                <span>Message éphémère ouvert</span>
+                              </div>
+                            ) : isOwn ? (
+                              <div className="flex items-center gap-2 bg-emerald-700/50 text-emerald-100 px-3 py-2 rounded-lg text-sm border border-emerald-500/30">
+                                <Icons.Eye size={16} />
+                                <span>Message éphémère (envoyé)</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setActiveEphemeralMedia({
+                                  type: message.mediaType as any,
+                                  url: message.mediaUrl!,
+                                  messageId: message.id
+                                })}
+                                className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold py-2 px-3 rounded-lg text-sm shadow-md transition-all active:scale-95"
+                              >
+                                <Icons.Eye size={16} className="animate-pulse" />
+                                <span>Voir le message éphémère</span>
+                              </button>
+                            )}
                           </div>
+                        ) : (
+                          <>
+                            {message.mediaType === 'audio' && (
+                              <div className="py-2">
+                                <audio src={message.mediaUrl} controls className="max-w-full rounded" />
+                              </div>
+                            )}
+                            {message.mediaType === 'image' && (
+                              <div className="py-2">
+                                <img src={message.mediaUrl} alt="Image" className="max-w-full max-h-48 rounded object-cover cursor-pointer hover:opacity-90" onClick={() => window.open(message.mediaUrl)} />
+                              </div>
+                            )}
+                            {message.mediaType === 'video' && (
+                              <div className="py-2">
+                                <video src={message.mediaUrl} controls className="max-w-full max-h-48 rounded" />
+                              </div>
+                            )}
+                            {(!message.mediaType || message.mediaType === 'text') && (
+                              <p className="break-words">{message.content}</p>
+                            )}
+                          </>
                         )}
-                        {message.mediaType === 'image' && (
-                          <div className="py-2">
-                            <img src={message.mediaUrl} alt="Image" className="max-w-full max-h-48 rounded object-cover cursor-pointer hover:opacity-90" onClick={() => window.open(message.mediaUrl)} />
-                          </div>
-                        )}
-                        {message.mediaType === 'video' && (
-                          <div className="py-2">
-                            <video src={message.mediaUrl} controls className="max-w-full max-h-48 rounded" />
-                          </div>
-                        )}
-                        {(!message.mediaType || message.mediaType === 'text') && (
-                          <p className="break-words">{message.content}</p>
-                        )}
-                        <p className={`text-xs mt-1 ${isOwn ? 'text-emerald-200' : 'text-gray-400'}`}>
-                          {formatTime(message.createdAt)}
-                          {isOwn && message.isRead && (
-                            <span className="ml-1">✓✓</span>
+                        <p className={`text-xs mt-1 ${isOwn ? 'text-emerald-200' : 'text-gray-400'} flex items-center justify-end gap-1`}>
+                          <span>{formatTime(message.createdAt)}</span>
+                          {isOwn && (
+                            <span className="flex items-center">
+                              {message.isRead ? (
+                                <span style={{ color: '#4ade80' }} className="font-bold">✓✓</span>
+                              ) : message.isReceived ? (
+                                <span className="text-emerald-200 font-bold">✓✓</span>
+                              ) : (
+                                <span className="text-emerald-300 font-bold">✓</span>
+                              )}
+                            </span>
                           )}
                         </p>
                       </div>
@@ -552,6 +674,20 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
                 <button
                   type="button"
+                  onClick={() => setIsEphemeralMode(!isEphemeralMode)}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                    isEphemeralMode 
+                      ? 'bg-amber-500 text-white shadow-md active:scale-95' 
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                  disabled={!conversationId || isSending}
+                  title="Message éphémère (vue unique)"
+                >
+                  <Icons.Eye size={20} className={isEphemeralMode ? 'animate-pulse' : ''} />
+                </button>
+
+                <button
+                  type="button"
                   onClick={startRecording}
                   className="w-12 h-12 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-500 transition-colors"
                   disabled={!conversationId || isSending}
@@ -575,6 +711,73 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Ephemeral Media Viewer Modal */}
+      {activeEphemeralMedia && (
+        <div className="fixed inset-0 z-[80] bg-black/95 flex flex-col items-center justify-center p-4 animate-fade-in">
+          <div className="absolute top-4 right-4 z-10 flex gap-4">
+            <button
+              onClick={() => {
+                // Notifier le serveur et le local que le message a été ouvert
+                (messageService as any).openEphemeralMessage?.(activeEphemeralMedia.messageId);
+                // Mettre à jour localement immédiatement
+                setMessages(prev => prev.map(m => m.id === activeEphemeralMedia.messageId ? { ...m, isOpened: true } : m));
+                setActiveEphemeralMedia(null);
+              }}
+              className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            >
+              <Icons.X size={24} />
+            </button>
+          </div>
+
+          <div className="max-w-full max-h-[80vh] flex items-center justify-center">
+            {activeEphemeralMedia.type === 'image' && (
+              <img 
+                src={activeEphemeralMedia.url} 
+                alt="Ephemeral" 
+                className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-2xl select-none pointer-events-none" 
+              />
+            )}
+            {activeEphemeralMedia.type === 'video' && (
+              <video 
+                src={activeEphemeralMedia.url} 
+                controls 
+                autoPlay
+                className="max-w-full max-h-[75vh] rounded-lg shadow-2xl" 
+                onEnded={() => {
+                  (messageService as any).openEphemeralMessage?.(activeEphemeralMedia.messageId);
+                  setMessages(prev => prev.map(m => m.id === activeEphemeralMedia.messageId ? { ...m, isOpened: true } : m));
+                  setActiveEphemeralMedia(null);
+                }}
+              />
+            )}
+            {activeEphemeralMedia.type === 'audio' && (
+              <div className="bg-white/10 p-8 rounded-2xl flex flex-col items-center gap-4 text-white text-center">
+                <div className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center animate-pulse">
+                  <Icons.Mic size={32} />
+                </div>
+                <p className="font-semibold text-lg">Note vocale à écoute unique</p>
+                <audio 
+                  src={activeEphemeralMedia.url} 
+                  controls 
+                  autoPlay 
+                  onEnded={() => {
+                    (messageService as any).openEphemeralMessage?.(activeEphemeralMedia.messageId);
+                    setMessages(prev => prev.map(m => m.id === activeEphemeralMedia.messageId ? { ...m, isOpened: true } : m));
+                    setActiveEphemeralMedia(null);
+                  }}
+                  className="mt-2"
+                />
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-8 text-white/60 text-sm flex items-center gap-2">
+            <Icons.Lock size={14} />
+            <span>Ce message éphémère s'autodétruira dès que vous le fermerez ou que la lecture se terminera.</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

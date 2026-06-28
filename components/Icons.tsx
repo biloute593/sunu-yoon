@@ -32,7 +32,9 @@ import {
   Home,
   Mic,
   Paperclip,
-  Check
+  Check,
+  Eye,
+  Lock
 } from 'lucide-react';
 
 export const Icons = {
@@ -68,5 +70,7 @@ export const Icons = {
   Home,
   Mic,
   Paperclip,
-  Check
+  Check,
+  Eye,
+  Lock
 };

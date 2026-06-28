@@ -15,6 +15,9 @@ export interface Message {
   sender?: { id: string; name: string; avatarUrl: string };
   mediaType?: 'text' | 'audio' | 'image' | 'video';
   mediaUrl?: string;
+  viewOnce?: boolean;
+  isOpened?: boolean;
+  isReceived?: boolean;
 }
 
 export interface Conversation {
@@ -202,13 +205,15 @@ const parseMessageMedia = (message: Message): Message => {
   try {
     if (message.content.startsWith('{') && message.content.endsWith('}')) {
       const parsed = JSON.parse(message.content);
-      if (parsed.type && (parsed.url || parsed.fileUrl)) {
+      if (parsed.type && (parsed.url !== undefined || parsed.fileUrl !== undefined)) {
         return {
           ...message,
           mediaType: parsed.type,
           mediaUrl: parsed.url || parsed.fileUrl,
-          content: parsed.text || ''
-        };
+          content: parsed.text || '',
+          viewOnce: parsed.viewOnce,
+          isOpened: parsed.isOpened
+        } as any;
       }
     }
   } catch (e) {
@@ -435,6 +440,7 @@ let socket: Socket | null = null;
 let socketHandlersAttached = false;
 const joinedConversationIds: Set<string> = new Set();
 const messageListeners: Set<MessageCallback> = new Set();
+const messageUpdatedListeners: Set<MessageCallback> = new Set();
 const typingListeners: Set<TypingCallback> = new Set();
 
 function subscribeToConversation(conversationId: string) {
@@ -508,6 +514,12 @@ function attachSocketHandlers(): void {
     const message = toBackendMessage(payload);
     mergeRemoteMessage(message);
     messageListeners.forEach((listener) => listener(message));
+  });
+
+  socket.on('message_updated', (payload: BackendMessageRow) => {
+    const message = toBackendMessage(payload);
+    mergeRemoteMessage(message);
+    messageUpdatedListeners.forEach((listener) => listener(message));
   });
 
   socket.on('user_typing', (payload: { conversationId: string; userId: string }) => {
@@ -618,8 +630,15 @@ export const socketService = {
       }
     }
   },
+  openEphemeralMessage: (messageId: string) => {
+    if (isBackendMode() && socket?.connected) {
+      socket.emit('open_ephemeral_message', { messageId });
+    }
+  },
   onNewMessage: (cb: MessageCallback) => messageListeners.add(cb),
   offNewMessage: (cb: MessageCallback) => messageListeners.delete(cb),
+  onMessageUpdated: (cb: MessageCallback) => messageUpdatedListeners.add(cb),
+  offMessageUpdated: (cb: MessageCallback) => messageUpdatedListeners.delete(cb),
   onTyping: (cb: TypingCallback) => typingListeners.add(cb),
   offTyping: (cb: TypingCallback) => typingListeners.delete(cb),
 
@@ -712,8 +731,15 @@ export const messageService = {
     }
     persistLocalState();
   },
+  openEphemeralMessage: (messageId: string) => {
+    if (isBackendMode()) {
+      socketService.openEphemeralMessage(messageId);
+    }
+  },
   onNewMessage: (cb: MessageCallback) => messageListeners.add(cb),
   offNewMessage: (cb: MessageCallback) => messageListeners.delete(cb),
+  onMessageUpdated: (cb: MessageCallback) => socketService.onMessageUpdated(cb),
+  offMessageUpdated: (cb: MessageCallback) => socketService.offMessageUpdated(cb),
   onTyping: (cb: TypingCallback) => typingListeners.add(cb),
   offTyping: (cb: TypingCallback) => typingListeners.delete(cb),
 
