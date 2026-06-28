@@ -1761,18 +1761,38 @@ const ProfileView: React.FC<{
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {booking.status !== 'CANCELLED' && (
-                      <button
-                        onClick={() => onOpenConversation({
-                          recipientId: booking.ride.driver.id,
-                          recipientName: booking.ride.driver.name,
-                          recipientAvatar: booking.ride.driver.avatarUrl,
-                          rideId: booking.ride.id
-                        })}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors"
-                      >
-                        <Icons.MessageCircle size={16} />
-                        Contacter le chauffeur
-                      </button>
+                      <>
+                        <button
+                          onClick={() => onOpenConversation({
+                            recipientId: booking.ride.driver.id,
+                            recipientName: booking.ride.driver.name,
+                            recipientAvatar: booking.ride.driver.avatarUrl,
+                            rideId: booking.ride.id
+                          })}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors"
+                        >
+                          <Icons.MessageCircle size={16} />
+                          Contacter le chauffeur
+                        </button>
+
+                        {booking.status === 'CONFIRMED' && (
+                          <button
+                            onClick={() => {
+                              onOpenConversation({
+                                recipientId: booking.ride.driver.id,
+                                recipientName: booking.ride.driver.name,
+                                recipientAvatar: booking.ride.driver.avatarUrl,
+                                rideId: booking.ride.id
+                              });
+                              localStorage.setItem('auto_open_tracking', 'true');
+                            }}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-sm font-semibold rounded-lg transition-colors border border-emerald-200"
+                          >
+                            <Icons.Navigation size={16} className="animate-pulse" />
+                            Suivre en direct (GPS)
+                          </button>
+                        )}
+                      </>
                     )}
                     {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
                       <button

@@ -3,6 +3,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { messageService, Message } from '../services/messageService';
 import { Icons } from './Icons';
 import { ApiClient } from '../services/apiClient';
+import LiveMap from './LiveMap';
+import { trackingService } from '../services/trackingService';
+import { Coordinates } from '../types';
 
 interface ChatWindowProps {
   isOpen: boolean;
@@ -41,6 +44,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileData, setProfileData] = useState<any | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [showTrackingMap, setShowTrackingMap] = useState(false);
+  const [isSharingLocation, setIsSharingLocation] = useState(false);
+  const [myCoords, setMyCoords] = useState<Coordinates | null>(null);
+  const [otherCoords, setOtherCoords] = useState<Coordinates | null>(null);
+  const watchIdRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const initialMessageSentRef = useRef(false);
@@ -265,6 +273,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     initChat();
   }, [isOpen, user, recipientId, recipientName, recipientAvatar, rideId]);
 
+  // Ouvrir automatiquement le tracking GPS si demandé
+  useEffect(() => {
+    if (isOpen && rideId && localStorage.getItem('auto_open_tracking') === 'true') {
+      setShowTrackingMap(true);
+      localStorage.removeItem('auto_open_tracking');
+    }
+  }, [isOpen, rideId]);
+
   // Auto-envoyer le message initial (réservation) une seule fois
   useEffect(() => {
     if (!conversationId || !initialMessage || initialMessageSentRef.current || isLoading) return;
@@ -385,6 +401,84 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       inputRef.current?.focus();
     }
   }, [isOpen, isLoading]);
+
+  // Effet pour s'abonner au canal de suivi GPS temps réel du trajet lié
+  useEffect(() => {
+    if (!rideId || !showTrackingMap) return;
+
+    const unsubscribe = trackingService.subscribeToRide(
+      rideId,
+      (update) => {
+        // Mettre à jour la position de l'autre participant s'il s'agit de ses coordonnées
+        if (update.coords && update.senderId !== currentUserId) {
+          setOtherCoords(update.coords);
+        }
+      },
+      (err) => {
+        console.error("Erreur de connexion au canal GPS:", err);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [rideId, showTrackingMap, currentUserId]);
+
+  // Nettoyage du watchPosition à la fermeture/démontage
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
+
+  const toggleLocationSharing = () => {
+    if (isSharingLocation) {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      setIsSharingLocation(false);
+      setMyCoords(null);
+      // Notifier l'arrêt du tracking
+      if (rideId) {
+        trackingService.stopDriverTracking(rideId);
+      }
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      alert("La géolocalisation n'est pas supportée par votre navigateur.");
+      return;
+    }
+
+    setIsSharingLocation(true);
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const speed = position.coords.speed ?? undefined;
+        const heading = position.coords.heading ?? undefined;
+        const coords = { lat, lng };
+        setMyCoords(coords);
+
+        if (rideId) {
+          await trackingService.publishDriverLocation(rideId, {
+            coords,
+            speed,
+            heading,
+            senderId: currentUserId
+          });
+        }
+      },
+      (error) => {
+        console.error("Erreur GPS:", error);
+        setIsSharingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   const handleHeaderClick = async () => {
     if (!recipientId || recipientId === currentUserId) return;
@@ -530,6 +624,68 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             <Icons.X size={24} />
           </button>
         </div>
+
+        {/* GPS tracking sub-header */}
+        {rideId && (
+          <>
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100/50 px-4 py-2.5 flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-emerald-800 font-semibold">
+                <Icons.Navigation size={16} className="text-emerald-600 animate-pulse animate-duration-1000" />
+                <span>📍 Suivi GPS Temps Réel</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTrackingMap(!showTrackingMap)}
+                className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition-all flex items-center gap-1 shadow-sm active:scale-95"
+              >
+                <Icons.Map size={12} />
+                <span>{showTrackingMap ? 'Masquer la carte' : 'Afficher la carte'}</span>
+              </button>
+            </div>
+
+            {showTrackingMap && (
+              <div className="border-b border-gray-100 bg-white p-3 space-y-3 animate-fade-in">
+                <div className="relative rounded-xl overflow-hidden shadow-inner border border-gray-100">
+                  <LiveMap
+                    height="220px"
+                    userLocation={myCoords}
+                    driverLocation={otherCoords ? {
+                      rideId,
+                      driverId: recipientId,
+                      coords: otherCoords,
+                      timestamp: new Date()
+                    } : null}
+                    initialCenter={myCoords || otherCoords || { lat: 14.6928, lng: -17.4467 }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between gap-4 text-xs">
+                  <div className="flex items-center gap-1.5 text-gray-500 font-medium">
+                    <span className={`w-2 h-2 rounded-full ${isSharingLocation ? 'bg-emerald-500 animate-ping' : 'bg-gray-400'}`} />
+                    <span>
+                      {isSharingLocation 
+                        ? 'Vous partagez votre position' 
+                        : 'Partage de position désactivé'
+                      }
+                    </span>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={toggleLocationSharing}
+                    className={`px-3 py-1.5 font-bold rounded-lg transition-all border ${
+                      isSharingLocation 
+                        ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' 
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                    }`}
+                  >
+                    {isSharingLocation ? 'Arrêter le partage' : 'Partager ma position'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">

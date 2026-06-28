@@ -6,6 +6,7 @@ export interface TrackingUpdate {
   coords: Coordinates;
   speed?: number;
   heading?: number;
+  senderId?: string;
   updatedAt: string;
   ended?: boolean;
   reason?: string;
@@ -23,6 +24,7 @@ class TrackingService {
     coords: Coordinates;
     speed?: number;
     heading?: number;
+    senderId?: string;
   }): Promise<void> {
     if (!rideId) return;
 
@@ -41,6 +43,7 @@ class TrackingService {
           coords: payload.coords,
           speed: payload.speed,
           heading: payload.heading,
+          senderId: payload.senderId,
           updatedAt: new Date().toISOString(),
         },
       });
