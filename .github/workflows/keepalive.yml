@@ -1,4 +1,4 @@
-﻿name: Keep Backend Awake
+name: Keep Backend Awake
 
 on:
   schedule:
@@ -10,4 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Backend Health Route
-        run: curl -f -s -o /dev/null -w %{http_code}\n https://sunu-yoon-backend.onrender.com/api/health || echo Ping failed
+        run: curl -f -s -o /dev/null -w "%{http_code}\n" https://sunu-yoon-backend.onrender.com/health || echo Ping failed
