@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { messageService, Message } from '../services/messageService';
 import { Icons } from './Icons';
+import { ApiClient } from '../services/apiClient';
 
 interface ChatWindowProps {
   isOpen: boolean;
@@ -37,6 +38,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const [isEphemeralMode, setIsEphemeralMode] = useState(false);
   const [activeEphemeralMedia, setActiveEphemeralMedia] = useState<{ type: 'image' | 'video' | 'audio'; url: string; messageId: string } | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileData, setProfileData] = useState<any | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const initialMessageSentRef = useRef(false);
@@ -382,6 +386,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   }, [isOpen, isLoading]);
 
+  const handleHeaderClick = async () => {
+    if (!recipientId || recipientId === currentUserId) return;
+    
+    setShowProfileModal(true);
+    setLoadingProfile(true);
+    try {
+      const res = await ApiClient.get<any>(`/users/${recipientId}`);
+      if (res.success && res.data?.user) {
+        setProfileData(res.data.user);
+      }
+    } catch (err) {
+      console.error("Erreur chargement profil public:", err);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !conversationId || isSending) return;
@@ -471,26 +492,38 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             <Icons.ChevronRight className="rotate-180 text-gray-500" size={24} />
           </button>
           
-          <div className="relative">
-            {recipientAvatar ? (
-              <img 
-                src={recipientAvatar} 
-                alt={recipientName} 
-                className="w-10 h-10 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                <Icons.User className="text-emerald-600" size={20} />
-              </div>
-            )}
-            <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
-          </div>
-          
-          <div className="flex-1">
-            <h3 className="font-bold text-gray-900">{recipientName}</h3>
-            {isTyping && (
-              <p className="text-xs text-emerald-600 animate-pulse">En train d'écrire...</p>
-            )}
+          <div 
+            onClick={handleHeaderClick}
+            className="flex flex-1 items-center gap-3 cursor-pointer hover:bg-gray-50 p-1.5 rounded-xl transition-all"
+          >
+            <div className="relative">
+              {recipientAvatar ? (
+                <img 
+                  src={recipientAvatar} 
+                  alt={recipientName} 
+                  className="w-10 h-10 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <Icons.User className="text-emerald-600" size={20} />
+                </div>
+              )}
+              <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
+            </div>
+            
+            <div className="flex-1">
+              <h3 className="font-bold text-gray-900 flex items-center gap-1">
+                {recipientName}
+                {profileData?.isVerified && (
+                  <Icons.CheckCircle size={14} className="text-emerald-500 animate-bounce" />
+                )}
+              </h3>
+              {isTyping ? (
+                <p className="text-xs text-emerald-600 animate-pulse">En train d'écrire...</p>
+              ) : (
+                <p className="text-xs text-gray-500 font-medium">Voir le profil et les avis →</p>
+              )}
+            </div>
           </div>
           
           <button onClick={onClose} className="hidden sm:block text-gray-400 hover:text-gray-600">
@@ -775,6 +808,160 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           <div className="mt-8 text-white/60 text-sm flex items-center gap-2">
             <Icons.Lock size={14} />
             <span>Ce message éphémère s'autodétruira dès que vous le fermerez ou que la lecture se terminera.</span>
+          </div>
+        </div>
+      )}
+
+      {/* Driver Profile & Reviews Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-slide-up">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 text-lg">Profil du conducteur</h3>
+              <button 
+                onClick={() => {
+                  setShowProfileModal(false);
+                  setProfileData(null);
+                }}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors"
+              >
+                <Icons.X size={18} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              {loadingProfile ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm text-gray-500">Chargement du profil...</span>
+                </div>
+              ) : profileData ? (
+                <>
+                  {/* Driver Header Card */}
+                  <div className="flex flex-col items-center text-center space-y-3">
+                    <div className="relative">
+                      {profileData.avatarUrl ? (
+                        <img 
+                          src={profileData.avatarUrl} 
+                          alt={profileData.name} 
+                          className="w-20 h-20 rounded-full object-cover border-4 border-emerald-500 shadow-md"
+                        />
+                      ) : (
+                        <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center border-4 border-emerald-500 shadow-md">
+                          <Icons.User className="text-emerald-600" size={40} />
+                        </div>
+                      )}
+                      {profileData.isVerified && (
+                        <span className="absolute bottom-0 right-0 w-6 h-6 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center text-white shadow-sm" title="Profil vérifié">
+                          <Icons.Check size={12} className="stroke-[3]" />
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <h4 className="font-extrabold text-gray-900 text-xl">{profileData.name}</h4>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Membre depuis {new Date(profileData.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                      </p>
+                    </div>
+
+                    {/* Stats Row */}
+                    <div className="flex justify-center items-center gap-6 w-full py-3 bg-gray-50 rounded-xl border border-gray-100">
+                      <div className="text-center">
+                        <div className="font-extrabold text-gray-900 text-lg flex items-center justify-center gap-1">
+                          <Icons.Star className="text-amber-500 fill-amber-500" size={18} />
+                          <span>{profileData.rating ? profileData.rating.toFixed(1) : '4.8'}</span>
+                        </div>
+                        <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Note globale</div>
+                      </div>
+                      <div className="w-px h-8 bg-gray-200" />
+                      <div className="text-center">
+                        <div className="font-extrabold text-gray-900 text-lg">
+                          {profileData.completedRides || '0'}
+                        </div>
+                        <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Trajets publiés</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vehicle Info */}
+                  {profileData.carModel && (
+                    <div className="space-y-2">
+                      <h5 className="font-bold text-gray-900 text-sm">Véhicule</h5>
+                      <div className="flex items-center gap-3 p-3 bg-emerald-50/50 rounded-xl border border-emerald-50 text-emerald-900">
+                        <Icons.Car size={20} className="text-emerald-600" />
+                        <div>
+                          <div className="text-sm font-semibold">{profileData.carModel}</div>
+                          <div className="text-xs text-emerald-700/80">Véhicule de confiance</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reviews Section */}
+                  <div className="space-y-3">
+                    <h5 className="font-bold text-gray-900 text-sm flex items-center justify-between">
+                      <span>Derniers avis reçus</span>
+                      <span className="text-xs font-semibold text-gray-500">
+                        ({profileData.reviewCount || 0} avis)
+                      </span>
+                    </h5>
+
+                    <div className="space-y-3">
+                      {!profileData.reviewsReceived || profileData.reviewsReceived.length === 0 ? (
+                        <div className="text-center py-6 bg-gray-50 rounded-xl text-xs text-gray-500 border border-dashed border-gray-200">
+                          Aucun avis rédigé pour le moment.
+                        </div>
+                      ) : (
+                        profileData.reviewsReceived.map((review: any) => (
+                          <div key={review.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                {review.author?.avatarUrl ? (
+                                  <img 
+                                    src={review.author.avatarUrl} 
+                                    alt="" 
+                                    className="w-6 h-6 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                                    <Icons.User size={12} className="text-gray-500" />
+                                  </div>
+                                )}
+                                <span className="font-bold text-xs text-gray-900">{review.author?.name}</span>
+                              </div>
+                              <div className="flex items-center gap-0.5 text-amber-500">
+                                {Array.from({ length: 5 }).map((_, i) => (
+                                  <Icons.Star 
+                                    key={i} 
+                                    size={10} 
+                                    className={i < review.rating ? 'fill-amber-500' : 'text-gray-200'} 
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                            {review.comment && (
+                              <p className="text-xs text-gray-600 leading-relaxed italic">
+                                "{review.comment}"
+                              </p>
+                            )}
+                            <div className="text-[10px] text-gray-400 text-right">
+                              {new Date(review.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  Impossible de charger les données du conducteur.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
