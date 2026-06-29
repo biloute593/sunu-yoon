@@ -34,7 +34,8 @@ import {
   Paperclip,
   Check,
   Eye,
-  Lock
+  Lock,
+  Map
 } from 'lucide-react';
 
 export const Icons = {
@@ -72,5 +73,6 @@ export const Icons = {
   Paperclip,
   Check,
   Eye,
-  Lock
+  Lock,
+  Map
 };
