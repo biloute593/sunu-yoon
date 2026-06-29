@@ -132,7 +132,7 @@ const LiveTrackingPanel: React.FC<LiveTrackingPanelProps> = ({ userLocation }) =
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.4em] text-emerald-600 mb-1">Temps réel</p>
-            <h2 className="text-2xl font-bold text-gray-900">Suivez vos chauffeurs comme sur Uber</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Suivez votre trajet en temps réel</h2>
             <p className="text-gray-500 text-sm mt-2">
               Partage GPS pour les conducteurs, suivi instantané pour les passagers, sans inscription.
             </p>
