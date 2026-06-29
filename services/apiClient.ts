@@ -125,6 +125,14 @@ class ApiClient {
         }
       }
 
+      // Si toujours 401, nettoyer la session locale corrompue/inexistante (ex: DB réinitialisée)
+      if (response.status === 401) {
+        TokenManager.clearTokens();
+        localStorage.removeItem('sunu_yoon_user');
+        localStorage.removeItem('sunu_yoon_auth_provider');
+        window.dispatchEvent(new Event('storage'));
+      }
+
       const data = await response.json();
       return data;
     } catch (error) {
