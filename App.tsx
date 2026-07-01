@@ -487,10 +487,21 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void, onBook: () => void }
           </div>
           <div>
             <h4 className="text-sm font-semibold text-gray-900">{driver.name}</h4>
-            <div className="flex items-center gap-1 text-xs text-gray-500">
-              <Icons.Star size={12} className="text-yellow-400 fill-yellow-400" />
-              <span className="font-medium text-gray-700">{ratingLabel}</span>
-              <span className="text-gray-400">{reviewLabel}</span>
+            <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+              <div className="flex items-center gap-0.5">
+                <Icons.Star size={11} className="text-yellow-400 fill-yellow-400" />
+                <span className="font-semibold text-gray-700">{ratingLabel}</span>
+                <span className="text-gray-400 ml-0.5">{reviewLabel}</span>
+              </div>
+              {driver.phone && (
+                <>
+                  <span className="text-gray-300">•</span>
+                  <span className="flex items-center gap-0.5 text-emerald-600 font-bold">
+                    <Icons.Phone size={10} />
+                    {driver.phone}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -517,6 +528,31 @@ const RideDetails: React.FC<{
   onChat: () => void
 }> = ({ ride, onBack, onBook, onChat }) => {
   const driver = ride.driver || { id: '', name: 'Conducteur', avatarUrl: '', rating: 4.8, reviewCount: 0, isVerified: false };
+  const { user } = useAuth();
+  const [localStatus, setLocalStatus] = useState(ride.status);
+  const [completing, setCompleting] = useState(false);
+
+  const isOwner = user && ride.driver && ride.driver.id === user.id;
+
+  const handleComplete = async () => {
+    if (window.confirm('Voulez-vous vraiment clôturer ce trajet ? Il ne sera plus visible ni réservable.')) {
+      setCompleting(true);
+      try {
+        const res = await ApiClient.post<any>(`/rides/${ride.id}/complete`);
+        if (res.success) {
+          alert('Le trajet a été clôturé avec succès.');
+          setLocalStatus('COMPLETED');
+        } else {
+          alert(res.error?.message || res.message || 'Erreur lors de la clôture.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Une erreur réseau est survenue.');
+      } finally {
+        setCompleting(false);
+      }
+    }
+  };
   
   // Safe date parsing with Safari/cross-browser support
   const parseSafeDate = (dateStr: any): Date => {
@@ -794,6 +830,27 @@ const RideDetails: React.FC<{
               <Icons.Info size={12} />
               Les trajets invités se réservent directement avec le conducteur.
             </p>
+          </div>
+        ) : isOwner ? (
+          <div className="space-y-3">
+            {localStatus === 'COMPLETED' ? (
+              <div className="w-full py-4 bg-gray-100 text-gray-500 font-bold rounded-xl text-center text-lg">
+                Ce trajet est clôturé
+              </div>
+            ) : localStatus === 'CANCELLED' ? (
+              <div className="w-full py-4 bg-red-50 text-red-500 font-bold rounded-xl text-center text-lg">
+                Ce trajet est annulé
+              </div>
+            ) : (
+              <button
+                disabled={completing}
+                onClick={handleComplete}
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all text-lg flex items-center justify-center gap-2"
+              >
+                <Icons.CheckCircle size={20} />
+                {completing ? 'Clôture en cours...' : 'Clôturer le trajet'}
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -1597,6 +1654,33 @@ const ProfileView: React.FC<{
     }
   }, [loadData]);
 
+  const handleCompleteRide = useCallback(async (rideId: string) => {
+    if (window.confirm('Voulez-vous vraiment clôturer ce trajet ? Il ne sera plus visible ni réservable.')) {
+      setBookingFeedback(null);
+      try {
+        const res = await ApiClient.post<any>(`/rides/${rideId}/complete`);
+        if (res.success) {
+          setBookingFeedback({
+            type: 'success',
+            message: 'Le trajet a été clôturé avec succès.'
+          });
+          await loadData();
+        } else {
+          setBookingFeedback({
+            type: 'error',
+            message: res.error?.message || res.message || 'Erreur lors de la clôture.'
+          });
+        }
+      } catch (err) {
+        console.error(err);
+        setBookingFeedback({
+          type: 'error',
+          message: 'Une erreur réseau est survenue pendant la clôture.'
+        });
+      }
+    }
+  }, [loadData]);
+
   if (!user) return null;
 
   return (
@@ -1707,8 +1791,24 @@ const ProfileView: React.FC<{
                 </div>
                   );
                 })()}
-                <div className="text-right">
+                <div className="text-right flex flex-col items-end gap-2">
                   <span className="block font-bold text-emerald-600">{ride.price} {ride.currency}</span>
+                  {ride.status === 'COMPLETED' ? (
+                    <span className="text-xs font-semibold px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full">
+                      Clôturé
+                    </span>
+                  ) : ride.status === 'CANCELLED' ? (
+                    <span className="text-xs font-semibold px-2.5 py-1 bg-red-100 text-red-600 rounded-full">
+                      Annulé
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleCompleteRide(ride.id)}
+                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors shadow-sm"
+                    >
+                      Clôturer le trajet
+                    </button>
+                  )}
                 </div>
               </div>
             ))

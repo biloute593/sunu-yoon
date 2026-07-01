@@ -591,4 +591,25 @@ router.post('/:id/cancel', authMiddleware, async (req: AuthRequest, res, next) =
 });
 
 // Route de débogage pour voir tous les trajets
+// ============ CLÔTURER UN TRAJET ============
+router.post('/:id/complete', authMiddleware, async (req: AuthRequest, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+    const ride = await prisma.ride.findUnique({ where: { id } });
+    if (!ride) throw new AppError('Trajet non trouve', 404);
+    if (ride.driverId !== userId) throw new AppError("Vous n'etes pas autorise a cloturer ce trajet", 403);
+    if (ride.status === 'COMPLETED' || ride.status === 'CANCELLED') throw new AppError('Ce trajet est deja cloture ou annule', 400);
+
+    const updatedRide = await prisma.ride.update({
+      where: { id },
+      data: { status: 'COMPLETED' }
+    });
+
+    res.json({ success: true, message: 'Trajet cloture avec succes.', data: { ride: updatedRide } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
