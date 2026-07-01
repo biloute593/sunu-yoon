@@ -3,8 +3,9 @@ import { body, validationResult } from 'express-validator';
 import { prisma, io } from '../index';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
-import { sendBookingNotification } from '../services/sms';
+import { sendBookingNotification, sendDriverBookingNotification } from '../services/sms';
 import { sendBookingConfirmationEmail } from '../services/email';
+import { notifyUser } from '../services/notifications';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -96,7 +97,17 @@ router.post('/',
         }
       });
 
-      // Notifier le conducteur via WebSocket
+      // Notifier le conducteur via push, in-app, SMS et WebSocket
+      await notifyUser(
+        ride.driverId,
+        'BOOKING_REQUEST',
+        'Nouvelle réservation',
+        `${booking.passenger.name} a réservé ${seats} place(s) pour ${ride.originCity} → ${ride.destinationCity}`,
+        { bookingId: booking.id, rideId },
+        { sendPush: true }
+      );
+
+      // Notifier le conducteur via un événement spécifique de WebSocket pour l'ouverture du modal de demande
       io.to(`user_${ride.driverId}`).emit('booking_requested', {
         bookingId: booking.id,
         passengerId: userId,
@@ -108,16 +119,16 @@ router.post('/',
         departureTime: ride.departureTime
       });
 
-      // Créer une notification pour le conducteur
-      await prisma.notification.create({
-        data: {
-          userId: ride.driverId,
-          type: 'BOOKING_REQUEST',
-          title: 'Nouvelle réservation',
-          message: `${booking.passenger.name} a réservé ${seats} place(s) pour ${ride.originCity} → ${ride.destinationCity}`,
-          data: { bookingId: booking.id, rideId }
-        }
-      });
+      // Envoyer un SMS au conducteur
+      if (ride.driver.phone) {
+        await sendDriverBookingNotification(
+          ride.driver.phone,
+          booking.passenger.name || 'Un passager',
+          ride.originCity,
+          ride.destinationCity,
+          seats
+        ).catch(err => logger.error('Erreur envoi SMS conducteur:', err));
+      }
 
       res.status(201).json({
         success: true,

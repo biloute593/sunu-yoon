@@ -77,3 +77,14 @@ export const sendRideReminder = async (
   const message = `Sunu Yoon: Rappel! Votre trajet ${departure} → ${destination} part dans ${minutesBefore} minutes. Préparez-vous!`;
   return sendSMS({ to: phone, message });
 };
+
+export const sendDriverBookingNotification = async (
+  phone: string,
+  passengerName: string,
+  departure: string,
+  destination: string,
+  seats: number
+): Promise<boolean> => {
+  const message = `Sunu Yoon: Nouvelle réservation! ${passengerName} a réservé ${seats} place(s) pour votre trajet ${departure} → ${destination}. Connectez-vous pour voir les détails.`;
+  return sendSMS({ to: phone, message });
+};

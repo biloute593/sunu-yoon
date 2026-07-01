@@ -1,8 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
-import { prisma } from '../index';
+import { prisma, io } from '../index';
 import { AppError } from '../middleware/errorHandler';
 import { guestBookingStore } from '../services/guestBookingStore';
+import { notifyUser } from '../services/notifications';
+import { sendDriverBookingNotification } from '../services/sms';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -89,24 +91,47 @@ router.post('/', inputValidators, async (req: Request, res: Response, next: Next
       }
     });
 
-    await prisma.notification.create({
-      data: {
-        userId: ride.driverId,
-        type: 'BOOKING_REQUEST',
-        title: 'Nouvelle réservation invitée',
-        message: `${passengerName} (${passengerPhone}) veut ${seats} place(s) sur ${ride.originCity} → ${ride.destinationCity}`,
-        data: {
-          rideId,
-          guestBookingId: snapshot.id,
-          seats,
-          passengerName,
-          passengerPhone,
-          paymentMethod
-        }
-      }
-    }).catch((error) => {
+    // Notifier le conducteur via push, in-app et WebSocket
+    await notifyUser(
+      ride.driverId,
+      'BOOKING_REQUEST',
+      'Nouvelle réservation invitée',
+      `${passengerName} (${passengerPhone}) veut ${seats} place(s) sur ${ride.originCity} → ${ride.destinationCity}`,
+      {
+        rideId,
+        guestBookingId: snapshot.id,
+        seats,
+        passengerName,
+        passengerPhone,
+        paymentMethod
+      },
+      { sendPush: true }
+    ).catch((error) => {
       logger.warn('Impossible de créer la notification invité', { error });
     });
+
+    // Émettre un événement spécifique WebSocket pour l'ouverture instantanée du modal de demande
+    io.to(`user_${ride.driverId}`).emit('booking_requested', {
+      bookingId: snapshot.id,
+      passengerId: 'guest',
+      passengerName: passengerName || 'Passager Invité',
+      passengerPhone: passengerPhone || '',
+      seats,
+      originCity: ride.originCity,
+      destinationCity: ride.destinationCity,
+      departureTime: ride.departureTime
+    });
+
+    // Envoyer un SMS au conducteur
+    if (ride.driver.phone) {
+      await sendDriverBookingNotification(
+        ride.driver.phone,
+        passengerName || 'Un passager',
+        ride.originCity,
+        ride.destinationCity,
+        seats
+      ).catch(err => logger.error('Erreur envoi SMS conducteur pour réservation invitée:', err));
+    }
 
     res.status(201).json({
       success: true,
