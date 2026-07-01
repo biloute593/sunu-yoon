@@ -496,10 +496,14 @@ const RideCard: React.FC<{ ride: Ride, onClick: () => void, onBook: () => void }
               {driver.phone && (
                 <>
                   <span className="text-gray-300">•</span>
-                  <span className="flex items-center gap-0.5 text-emerald-600 font-bold">
+                  <a
+                    href={`tel:${driver.phone}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-0.5 text-emerald-600 font-bold hover:underline"
+                  >
                     <Icons.Phone size={10} />
                     {driver.phone}
-                  </span>
+                  </a>
                 </>
               )}
             </div>

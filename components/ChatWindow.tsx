@@ -636,9 +636,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               ) : (
                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 font-medium">
                   {profileData?.phone && (
-                    <span className="flex items-center gap-0.5 text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">
+                    <a
+                      href={`tel:${profileData.phone}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-0.5 text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded hover:bg-emerald-100 transition-colors"
+                    >
                       <Icons.Phone size={10} /> {profileData.phone}
-                    </span>
+                    </a>
                   )}
                   {profileData?.phone && <span>•</span>}
                   <span>Voir le profil →</span>

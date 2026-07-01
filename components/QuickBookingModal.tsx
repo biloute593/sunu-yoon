@@ -193,9 +193,12 @@ export const QuickBookingModal: React.FC<QuickBookingModalProps> = ({
                 {driverPhone && (
                   <>
                     <span>•</span>
-                    <span className="flex items-center gap-1 text-emerald-600 font-medium">
+                    <a
+                      href={`tel:${driverPhone}`}
+                      className="flex items-center gap-1 text-emerald-600 font-bold hover:underline"
+                    >
                       <Icons.Phone size={10} /> {driverPhone}
-                    </span>
+                    </a>
                   </>
                 )}
               </div>
