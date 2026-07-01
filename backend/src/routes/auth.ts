@@ -206,8 +206,8 @@ router.post('/quick-login',
           tokens
         }
       });
-    } catch (error) {
-      next(error);
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message, stack: error.stack });
     }
   }
 );
