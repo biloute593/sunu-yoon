@@ -86,12 +86,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requêtes par fenêtre
-  message: { error: 'Trop de requêtes, veuillez réessayer plus tard.' }
-});
-app.use('/api/', limiter);
+if (process.env.DISABLE_RATE_LIMIT !== 'true') {
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // 100 requêtes par fenêtre
+    message: { error: 'Trop de requêtes, veuillez réessayer plus tard.' }
+  });
+  app.use('/api/', limiter);
+}
 
 // Rate limiting plus strict pour l'authentification
 const authLimiter = rateLimit({
@@ -99,8 +101,10 @@ const authLimiter = rateLimit({
   max: 10, // 10 tentatives
   message: { error: 'Trop de tentatives de connexion, réessayez dans 1 heure.' }
 });
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/verify', authLimiter);
+if (process.env.DISABLE_RATE_LIMIT !== 'true') {
+  app.use('/api/auth/login', authLimiter);
+  app.use('/api/auth/verify', authLimiter);
+}
 
 // Routes publiques
 app.use('/api/auth', authRoutes);
