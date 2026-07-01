@@ -44,6 +44,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileData, setProfileData] = useState<any | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [rideData, setRideData] = useState<any | null>(null);
   const [showTrackingMap, setShowTrackingMap] = useState(false);
   const [isSharingLocation, setIsSharingLocation] = useState(false);
   const [myCoords, setMyCoords] = useState<Coordinates | null>(null);
@@ -236,6 +237,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     const initChat = async () => {
       setIsLoading(true);
       try {
+        // Charger le profil du destinataire pour obtenir son numéro de téléphone
+        if (recipientId && recipientId !== currentUser.id) {
+          ApiClient.get<any>(`/users/${recipientId}`).then(res => {
+            if (res.success && res.data?.user) {
+              setProfileData(res.data.user);
+            }
+          }).catch(err => console.error("Erreur chargement profil destinataire:", err));
+        }
+
+        // Charger l'annonce s'il y a un trajet lié
+        if (rideId) {
+          ApiClient.get<any>(`/rides/${rideId}`).then(res => {
+            if (res.success && res.data?.ride) {
+              setRideData(res.data.ride);
+            }
+          }).catch(err => console.error("Erreur chargement annonce trajet:", err));
+        }
+
         // Chercher une conversation existante ou en créer une
         const conversations = await messageService.getConversations();
         const existing = conversations.find(c => 
@@ -615,7 +634,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               {isTyping ? (
                 <p className="text-xs text-emerald-600 animate-pulse">En train d'écrire...</p>
               ) : (
-                <p className="text-xs text-gray-500 font-medium">Voir le profil et les avis →</p>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 font-medium">
+                  {profileData?.phone && (
+                    <span className="flex items-center gap-0.5 text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">
+                      <Icons.Phone size={10} /> {profileData.phone}
+                    </span>
+                  )}
+                  {profileData?.phone && <span>•</span>}
+                  <span>Voir le profil →</span>
+                </div>
               )}
             </div>
           </div>
@@ -685,6 +712,34 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               </div>
             )}
           </>
+        )}
+
+        {/* Ride Ad Info Summary Banner */}
+        {rideData && (
+          <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between gap-4 text-sm shadow-sm animate-fade-in">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium mb-1">
+                <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">Trajet lié</span>
+                <span>•</span>
+                <span className="text-gray-700 font-semibold">{rideData.carModel || 'Véhicule'}</span>
+              </div>
+              <div className="font-bold text-gray-900 truncate">
+                {rideData.origin} → {rideData.destination}
+              </div>
+              <div className="text-xs text-gray-500 mt-0.5">
+                {new Date(rideData.departureTime).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à {new Date(rideData.departureTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
+            
+            <div className="text-right flex-shrink-0">
+              <div className="font-extrabold text-emerald-600 text-base">
+                {rideData.price.toLocaleString('fr-FR')} XOF
+              </div>
+              <div className="text-[10px] text-gray-400 mt-0.5">
+                {rideData.seatsAvailable} pl. restantes
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Messages */}

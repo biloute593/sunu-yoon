@@ -47,7 +47,7 @@ const buildGuestContact = (rawPhone: string) => {
 };
 
 type RideWithDriver = Ride & {
-  driver: Pick<User, 'id' | 'name' | 'avatarUrl' | 'rating' | 'reviewCount' | 'isVerified' | 'carModel'>;
+  driver: Pick<User, 'id' | 'name' | 'avatarUrl' | 'rating' | 'reviewCount' | 'isVerified' | 'carModel' | 'phone'>;
   bookings?: Array<{
     id: string;
     status?: string;
@@ -73,9 +73,10 @@ export const mapRegisteredRide = (ride: RideWithDriver) => {
       rating: ride.driver.rating ?? null,
       reviewCount: ride.driver.reviewCount ?? 0,
       isVerified: ride.driver.isVerified ?? false,
-      isGuest: false
+      isGuest: false,
+      phone: ride.driver.phone || null
     },
-    driverContact: null,
+    driverContact: ride.driver.phone ? buildGuestContact(ride.driver.phone) : null,
     origin: ride.originCity,
     originAddress: ride.originAddress,
     destination: ride.destinationCity,

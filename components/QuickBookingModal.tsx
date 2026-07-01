@@ -16,6 +16,7 @@ interface QuickBookingModalProps {
   driverId: string;
   driverName: string;
   driverAvatar?: string;
+  driverPhone?: string;
   onSuccess: (driverId: string, driverName: string, driverAvatar?: string, autoMessage?: string) => void;
   mode?: 'booking' | 'chat';
 }
@@ -33,6 +34,7 @@ export const QuickBookingModal: React.FC<QuickBookingModalProps> = ({
   driverId,
   driverName,
   driverAvatar,
+  driverPhone,
   onSuccess,
   mode = 'booking'
 }) => {
@@ -186,7 +188,17 @@ export const QuickBookingModal: React.FC<QuickBookingModalProps> = ({
             )}
             <div>
               <p className="font-semibold text-gray-900 text-sm">{driverName}</p>
-              <p className="text-xs text-gray-500">Chauffeur</p>
+              <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
+                <span>Chauffeur</span>
+                {driverPhone && (
+                  <>
+                    <span>•</span>
+                    <span className="flex items-center gap-1 text-emerald-600 font-medium">
+                      <Icons.Phone size={10} /> {driverPhone}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 

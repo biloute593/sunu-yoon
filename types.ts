@@ -23,6 +23,7 @@ export interface User {
   rating: number;
   reviewCount: number;
   isVerified: boolean;
+  phone?: string;
 }
 
 export interface Ride {

@@ -2691,6 +2691,7 @@ function AppContent() {
           driverId={quickBookingRide.driver.id}
           driverName={quickBookingRide.driver.name}
           driverAvatar={quickBookingRide.driver.avatarUrl}
+          driverPhone={quickBookingRide.driver.phone}
           onSuccess={handleQuickBookingSuccess}
           mode={quickBookingMode}
         />

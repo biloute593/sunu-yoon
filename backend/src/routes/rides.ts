@@ -104,7 +104,7 @@ router.get('/',
         where: whereClause,
         include: {
           driver: {
-            select: { id: true, name: true, avatarUrl: true, rating: true, reviewCount: true, isVerified: true, carModel: true }
+            select: { id: true, name: true, phone: true, avatarUrl: true, rating: true, reviewCount: true, isVerified: true, carModel: true }
           }
         },
         orderBy: { departureTime: 'asc' },
@@ -361,7 +361,7 @@ router.get('/my-rides', authMiddleware, async (req: AuthRequest, res, next) => {
       where: { driverId: userId },
       include: {
         driver: {
-          select: { id: true, name: true, avatarUrl: true, rating: true, reviewCount: true, isVerified: true, carModel: true }
+          select: { id: true, name: true, phone: true, avatarUrl: true, rating: true, reviewCount: true, isVerified: true, carModel: true }
         },
         bookings: {
           where: { status: { in: ['CONFIRMED', 'PENDING'] } },
@@ -399,7 +399,7 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res, next) => {
       where: { id },
       include: {
         driver: {
-          select: { id: true, name: true, avatarUrl: true, rating: true, reviewCount: true, isVerified: true, carModel: true }
+          select: { id: true, name: true, phone: true, avatarUrl: true, rating: true, reviewCount: true, isVerified: true, carModel: true }
         },
         bookings: {
           where: { status: { in: ['CONFIRMED', 'PENDING'] } },
@@ -484,7 +484,7 @@ router.post('/',
           distance, pricePerSeat, totalSeats, availableSeats: totalSeats,
           features: features || [], description
         },
-        include: { driver: { select: { id: true, name: true, avatarUrl: true, rating: true, isVerified: true } } }
+        include: { driver: { select: { id: true, name: true, phone: true, avatarUrl: true, rating: true, isVerified: true } } }
       });
 
       res.status(201).json({ success: true, message: 'Trajet publie avec succes', data: { ride } });
